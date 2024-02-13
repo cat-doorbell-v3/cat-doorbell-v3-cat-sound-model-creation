@@ -58,7 +58,7 @@ def save_features(features, output_file='mfcc_features.pkl'):
 
 
 # Example usage
-directory = './CAT_SOUND_DB_SAMPLES_WAV'
+directory = './CAT_SOUND_DB_SAMPLES_AUGMENTED'
 features = process_directory(directory)
 save_features(features, 'mfcc_features.pkl')
 
