@@ -4,6 +4,7 @@
 import pickle
 
 import numpy as np
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropout
@@ -110,3 +111,43 @@ history = model.fit(X_train_cnn, y_train_cat, batch_size=32, epochs=30, validati
 
 test_loss, test_accuracy = model.evaluate(X_test_cnn, y_test_cat)
 print(f"Test accuracy: {test_accuracy:.4f}, Test loss: {test_loss:.4f}")
+
+# Assuming `model` is your Keras model
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+
+# To enable quantization:
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+
+tflite_model = converter.convert()
+
+# Save the TensorFlow Lite model to file
+with open("cat_sound_model.tflite", "wb") as f:
+    f.write(tflite_model)
+
+# Load the TFLite model and allocate tensors
+interpreter = tf.lite.Interpreter(model_path="cat_sound_model.tflite")
+interpreter.allocate_tensors()
+
+# Get input and output tensors
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+
+# Test the model on input data (example)
+input_shape = input_details[0]['shape']
+input_data = np.array(np.expand_dims(X_test_cnn[0], 0), dtype=np.float32)
+interpreter.set_tensor(input_details[0]['index'], input_data)
+
+interpreter.invoke()
+
+# Extract the output
+output_data = interpreter.get_tensor(output_details[0]['index'])
+print(output_data)
+
+predicted_category_index = np.argmax(output_data)
+predicted_category_confidence = np.max(output_data)
+print(f"Predicted Category Index: {predicted_category_index}, Confidence: {predicted_category_confidence:.2f}")
+
+# Assuming `label_map` is a dictionary mapping category names to indexes
+inverse_label_map = {v: k for k, v in label_map.items()}
+predicted_category_name = inverse_label_map[predicted_category_index]
+print(f"Predicted Category: {predicted_category_name}")
