@@ -115,17 +115,38 @@ print(f"Test accuracy: {test_accuracy:.4f}, Test loss: {test_loss:.4f}")
 # Assuming `model` is your Keras model
 converter = tf.lite.TFLiteConverter.from_keras_model(model)
 
-# To enable quantization:
+# To enable full quantization, set the optimizations flag to use default optimizations
 converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
-tflite_model = converter.convert()
 
-# Save the TensorFlow Lite model to file
-with open("cat_sound_model.tflite", "wb") as f:
-    f.write(tflite_model)
+# Define a generator function that provides the representative dataset for calibration
+def representative_dataset_gen():
+    for input_value in X_train_cnn[:100]:  # Assuming you're using a subset of your training data
+        # Model has only one input so each data point has to be in a tuple
+        yield [np.expand_dims(input_value, axis=0).astype(np.float32)]
+
+
+# Set the representative dataset for quantization
+converter.representative_dataset = representative_dataset_gen
+
+# Ensure that if any ops can't be quantized, the converter throws an error
+converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+
+# Set the input and output tensors to uint8 (optional)
+converter.inference_input_type = tf.uint8
+converter.inference_output_type = tf.uint8
+
+# Convert the model
+tflite_quant_model = converter.convert()
+
+# Save the fully quantized model
+with open("cat_sound_model_quant.tflite", "wb") as f:
+    f.write(tflite_quant_model)
+
+# Following the conversion, you can proceed with the rest of your code to test the TFLite model
 
 # Load the TFLite model and allocate tensors
-interpreter = tf.lite.Interpreter(model_path="cat_sound_model.tflite")
+interpreter = tf.lite.Interpreter(model_path="cat_sound_model_quant.tflite")
 interpreter.allocate_tensors()
 
 # Get input and output tensors
@@ -134,7 +155,7 @@ output_details = interpreter.get_output_details()
 
 # Test the model on input data (example)
 input_shape = input_details[0]['shape']
-input_data = np.array(np.expand_dims(X_test_cnn[0], 0), dtype=np.float32)
+input_data = np.array(np.expand_dims(X_test_cnn[0], 0), dtype=np.uint8)
 interpreter.set_tensor(input_details[0]['index'], input_data)
 
 interpreter.invoke()
