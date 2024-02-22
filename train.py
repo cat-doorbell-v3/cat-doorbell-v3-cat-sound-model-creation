@@ -172,3 +172,9 @@ print(f"Predicted Category Index: {predicted_category_index}, Confidence: {predi
 inverse_label_map = {v: k for k, v in label_map.items()}
 predicted_category_name = inverse_label_map[predicted_category_index]
 print(f"Predicted Category: {predicted_category_name}")
+
+#
+#  7. Save the model
+# xxd -i cat_sound_model_quant.tflite > cat_sound_model.cc
+#
+#
