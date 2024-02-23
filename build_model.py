@@ -2,6 +2,7 @@ import os
 import pickle
 import shutil
 import subprocess
+import wave
 import zipfile
 
 import librosa
@@ -17,10 +18,34 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 
 
+def walk_directory_for_wav_sampling_rates(root_dir):
+    """
+    Walks through a directory and its subdirectories to find .wav files and compile a list of unique sampling rates.
+
+    :param root_dir: The root directory to start the walk from.
+    """
+    unique_sampling_rates = set()  # Use a set to store unique sampling rates
+
+    for subdir, dirs, files in os.walk(root_dir):
+        for file in files:
+            if file.endswith(".wav"):
+                file_path = os.path.join(subdir, file)
+                try:
+                    with wave.open(file_path, 'r') as wav_file:
+                        frame_rate = wav_file.getframerate()
+                        unique_sampling_rates.add(frame_rate)  # Add the frame rate to the set
+                except wave.Error as e:
+                    print(f"Error reading {file_path}: {e}")
+
+    # Convert the set to a sorted list to print the sampling rates in order
+    sorted_sampling_rates = sorted(list(unique_sampling_rates))
+    print(f"Unique Sampling Rates: {sorted_sampling_rates}")
+
+
 def get_audio_durations_and_average(directory_path):
     """
     Walks through a directory, calculates the duration of all .wav files,
-    and computes the average duration.
+    and computes the minimum, maximum, and average durations.
 
     Args:
     directory_path (str): Path to the directory to search for .wav files.
@@ -28,8 +53,7 @@ def get_audio_durations_and_average(directory_path):
     Returns:
     None
     """
-    total_duration = 0
-    file_count = 0
+    durations = []
 
     for root, dirs, files in os.walk(directory_path):
         for file in files:
@@ -37,13 +61,15 @@ def get_audio_durations_and_average(directory_path):
                 file_path = os.path.join(root, file)
                 y, sr = librosa.load(file_path, sr=None)  # Load with the original sampling rate
                 duration = librosa.get_duration(y=y, sr=sr)
-                print(f"File: {file_path}, Duration: {duration} seconds")
-                total_duration += duration
-                file_count += 1
+                durations.append(duration)
 
-    if file_count > 0:
-        average_duration = total_duration / file_count
-        print(f"Average Duration: {average_duration:.3f} seconds")
+    if durations:
+        min_duration = min(durations)
+        max_duration = max(durations)
+        average_duration = sum(durations) / len(durations)
+        print(f"Min Duration: {min_duration:.2f} seconds")
+        print(f"Max Duration: {max_duration:.2f} seconds")
+        print(f"Average Duration: {average_duration:.2f} seconds")
     else:
         print("No .wav files found in the directory.")
 
@@ -129,9 +155,6 @@ def remove_specific_files_and_dirs(base_directory, dir_prefix, file_prefix):
             print(f"File removed: {item_path}")
 
 
-# Example usage
-# remove_specific_files_and_dirs('/tmp', 'CAT_', 'mfcc_')
-
 def unzip_file(zip_file_path, extract_to_path):
     """
     Unzips a ZIP file to a specified location.
@@ -154,8 +177,6 @@ def unzip_file(zip_file_path, extract_to_path):
     print(f"File extracted to {extract_to_path}")
 
 
-# Example usage
-# unzip_file('path/to/your/file.zip', 'path/to/extract/to')
 
 def copy_and_convert_directory(source_dir, target_dir):
     """
@@ -214,7 +235,7 @@ def augment_and_save(file_path, target_dir, sampling_rate):
     sf.write(os.path.join(target_dir, f"{base_name}_speed.wav"), speed_changed_data, sampling_rate)
 
 
-def copy_and_augment_directory(source_dir, target_dir, sampling_rate=22050):
+def copy_and_augment_directory(source_dir, target_dir, sampling_rate=44100):
     for root, dirs, files in os.walk(source_dir):
         rel_path = os.path.relpath(root, source_dir)
         current_target_dir = os.path.join(target_dir, rel_path)
@@ -324,6 +345,9 @@ copy_and_convert_directory(source_dir, target_dir)
 directory = '/tmp/CAT_SOUND_DB_SAMPLES_WAV'
 get_audio_durations_and_average(directory)
 
+#
+walk_directory_for_wav_sampling_rates(directory)
+
 # Usage
 source_dir = '/tmp/CAT_SOUND_DB_SAMPLES_WAV'
 target_dir = '/tmp/CAT_SOUND_DB_SAMPLES_AUGMENTED'
@@ -332,20 +356,9 @@ copy_and_augment_directory(source_dir, target_dir)
 
 # Example usage
 directory = '/tmp/CAT_SOUND_DB_SAMPLES_AUGMENTED'
-features = process_directory(directory)
-print(f"Extracted features for {len(features)} files.")
-save_features(features, '/tmp/mfcc_features.pkl')
+data = process_directory(directory)
 
-print(f"Extracted features for {len(features)} files.")
-
-##
-# 1. Load the data
-#
-# Load your serialized MFCC features
-with open('/tmp/mfcc_features.pkl', 'rb') as f:
-    data = pickle.load(f)
-
-print(f"Loaded {len(data)} MFCC features.")
+print(f"There are {len(data)} MFCC features.")
 
 features = []
 labels = []
@@ -353,7 +366,7 @@ label_map = {'Angry': 0, 'Defense': 1, 'Fighting': 2, 'Happy': 3, 'HuntingMind':
              'Mating': 5, 'MotherCall': 6, 'Paining': 7, 'Resting': 8, 'Warning': 9}
 for file_path, mfcc_features in data.items():
     features.append(mfcc_features)
-    label = file_path.split('/')[4]  # Assuming the label is in the third segment of the path
+    label = file_path.split('/')[4]  # Assuming the label is in the forth segment of the path
     labels.append(label_map[label])
 
 features = np.array(features, dtype=object)
@@ -476,3 +489,12 @@ print(f"Predicted Category: {predicted_category_name}")
 #
 command = "xxd -i cat_sound_model_quant.tflite > cat_sound_model.cc"
 run_shell_command(command)
+
+#
+# constexpr int kAudioSampleFrequency = 16000;
+# constexpr int kFeatureSize = 13;
+# constexpr int kFeatureCount = 49;
+# constexpr int kFeatureElementCount = (kFeatureSize * kFeatureCount);
+# constexpr int kFeatureStrideMs = 20;
+# constexpr int kFeatureDurationMs = 30;
+#
