@@ -17,6 +17,73 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 
 
+def get_audio_durations_and_average(directory_path):
+    """
+    Walks through a directory, calculates the duration of all .wav files,
+    and computes the average duration.
+
+    Args:
+    directory_path (str): Path to the directory to search for .wav files.
+
+    Returns:
+    None
+    """
+    total_duration = 0
+    file_count = 0
+
+    for root, dirs, files in os.walk(directory_path):
+        for file in files:
+            if file.lower().endswith('.wav'):
+                file_path = os.path.join(root, file)
+                y, sr = librosa.load(file_path, sr=None)  # Load with the original sampling rate
+                duration = librosa.get_duration(y=y, sr=sr)
+                print(f"File: {file_path}, Duration: {duration} seconds")
+                total_duration += duration
+                file_count += 1
+
+    if file_count > 0:
+        average_duration = total_duration / file_count
+        print(f"Average Duration: {average_duration:.3f} seconds")
+    else:
+        print("No .wav files found in the directory.")
+
+
+def get_audio_duration(file_path):
+    """
+    Returns the duration of the audio file in seconds.
+
+    Args:
+    file_path (str): Path to the audio file.
+
+    Returns:
+    float: Duration of the audio file in seconds.
+    """
+    y, sr = librosa.load(file_path, sr=None)  # Load the file with its original sampling rate
+    duration = librosa.get_duration(y=y, sr=sr)
+    return duration
+
+
+def walk_and_get_durations(directory):
+    """
+    Walks through a directory, calculating the duration of all .wav files.
+
+    Args:
+    directory (str): The directory to walk through.
+
+    Returns:
+    None
+    """
+    total_duration = 0
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.lower().endswith('.wav'):
+                file_path = os.path.join(root, file)
+                duration = get_audio_duration(file_path)
+                print(f"File: {file_path}, Duration: {duration} seconds")
+                total_duration += duration
+    print(f"Total duration of all .wav files: {total_duration} seconds")
+
+
 def run_shell_command(command):
     """
     Runs a shell command.
@@ -253,6 +320,10 @@ target_dir = '/tmp/CAT_SOUND_DB_SAMPLES_WAV'
 print(f"Converting files from {source_dir} to {target_dir}...")
 copy_and_convert_directory(source_dir, target_dir)
 
+#
+directory = '/tmp/CAT_SOUND_DB_SAMPLES_WAV'
+get_audio_durations_and_average(directory)
+
 # Usage
 source_dir = '/tmp/CAT_SOUND_DB_SAMPLES_WAV'
 target_dir = '/tmp/CAT_SOUND_DB_SAMPLES_AUGMENTED'
@@ -283,7 +354,6 @@ label_map = {'Angry': 0, 'Defense': 1, 'Fighting': 2, 'Happy': 3, 'HuntingMind':
 for file_path, mfcc_features in data.items():
     features.append(mfcc_features)
     label = file_path.split('/')[4]  # Assuming the label is in the third segment of the path
-    print(f'Label: {label} - {label_map[label]}')
     labels.append(label_map[label])
 
 features = np.array(features, dtype=object)
