@@ -17,6 +17,58 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 
+AUDIO_SAMPLING_FREQUENCY = 44100
+FEATURE_SIZE = 13
+FFT_WINDOW_SIZE = 2048
+HOP_LENGTH = 512
+
+
+def standardize_length_and_save(audio_path, target_path, target_length=3.25, sr=44100):
+    """
+    Load an audio file, standardize its length, and save it to a target path.
+
+    Args:
+        audio_path (str): Path to the source audio file.
+        target_path (str): Path to save the standardized audio file.
+        target_length (float): Target length of the audio in seconds.
+        sr (int): Sampling rate to use for loading and saving the audio.
+    """
+    audio, _ = librosa.load(audio_path, sr=sr)
+    target_samples = int(target_length * sr)
+
+    if len(audio) < target_samples:
+        # Pad short files
+        pad_length = target_samples - len(audio)
+        audio = np.pad(audio, (0, pad_length), 'constant')
+    elif len(audio) > target_samples:
+        # Trim long files
+        audio = audio[:target_samples]
+
+    # Ensure the target directory exists
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    # Save the standardized audio file
+    sf.write(target_path, audio, sr)
+
+
+def standardize_directory_audio_lengths(source_dir, target_dir, target_length=3.25, sr=44100):
+    """
+    Walk through a directory tree, standardizing the length of all audio files and saving them to a parallel
+    structure in a target directory.
+
+    Args:
+        source_dir (str): Root directory to search for audio files.
+        target_dir (str): Root directory to save standardized audio files.
+        target_length (float): Target length in seconds for audio files.
+        sr (int): Sampling rate to use for audio files.
+    """
+    for subdir, _, files in os.walk(source_dir):
+        for file in files:
+            if file.lower().endswith('.wav'):  # Process only WAV files
+                source_path = os.path.join(subdir, file)
+                relative_path = os.path.relpath(source_path, source_dir)
+                target_path = os.path.join(target_dir, relative_path)
+                standardize_length_and_save(source_path, target_path, target_length, sr)
+
 
 def walk_directory_for_wav_sampling_rates(root_dir):
     """
@@ -40,6 +92,7 @@ def walk_directory_for_wav_sampling_rates(root_dir):
     # Convert the set to a sorted list to print the sampling rates in order
     sorted_sampling_rates = sorted(list(unique_sampling_rates))
     print(f"Unique Sampling Rates: {sorted_sampling_rates}")
+    return sorted_sampling_rates
 
 
 def get_audio_durations_and_average(directory_path):
@@ -54,6 +107,7 @@ def get_audio_durations_and_average(directory_path):
     None
     """
     durations = []
+    average_duration = None
 
     for root, dirs, files in os.walk(directory_path):
         for file in files:
@@ -72,6 +126,8 @@ def get_audio_durations_and_average(directory_path):
         print(f"Average Duration: {average_duration:.2f} seconds")
     else:
         print("No .wav files found in the directory.")
+
+    return average_duration
 
 
 def get_audio_duration(file_path):
@@ -177,7 +233,6 @@ def unzip_file(zip_file_path, extract_to_path):
     print(f"File extracted to {extract_to_path}")
 
 
-
 def copy_and_convert_directory(source_dir, target_dir):
     """
     Copy the directory structure from source to target and convert all MP3 files to WAV.
@@ -235,7 +290,7 @@ def augment_and_save(file_path, target_dir, sampling_rate):
     sf.write(os.path.join(target_dir, f"{base_name}_speed.wav"), speed_changed_data, sampling_rate)
 
 
-def copy_and_augment_directory(source_dir, target_dir, sampling_rate=44100):
+def copy_and_augment_directory(source_dir, target_dir, sampling_rate=AUDIO_SAMPLING_FREQUENCY):
     for root, dirs, files in os.walk(source_dir):
         rel_path = os.path.relpath(root, source_dir)
         current_target_dir = os.path.join(target_dir, rel_path)
@@ -247,7 +302,7 @@ def copy_and_augment_directory(source_dir, target_dir, sampling_rate=44100):
                 augment_and_save(file_path, current_target_dir, sampling_rate)
 
 
-def extract_mfcc_features(audio_file, n_mfcc=13, n_fft=2048, hop_length=512):
+def extract_mfcc_features(audio_file, n_mfcc=FEATURE_SIZE, n_fft=FFT_WINDOW_SIZE, hop_length=HOP_LENGTH):
     """
     Extract MFCC features from an audio file.
 
@@ -332,31 +387,53 @@ def representative_dataset_gen():
         yield [np.expand_dims(input_value, axis=0).astype(np.float32)]
 
 
+def print_audio_processing_constants():
+    print("\n\n###########################################")
+    print("Audio INPUT Processing Constants:")
+    print(f"AUDIO_SAMPLING_FREQUENCY: {AUDIO_SAMPLING_FREQUENCY}")
+    print(f"FEATURE_SIZE: {FEATURE_SIZE}")
+    print(f"FFT_WINDOW_SIZE: {FFT_WINDOW_SIZE}")
+    print(f"HOP_LENGTH: {HOP_LENGTH}")
+    print("---\n")
+    print("Audio OUTPUT Processing Constants:")
+    print(f"kAudioSampleFrequency: {AUDIO_SAMPLING_FREQUENCY}")
+    print(f"kFeatureSize: {FEATURE_SIZE}")
+    print(f"kFeatureCount: {round(FEATURE_COUNT)}")
+    print(f"kFeatureElementCount: {round(FEATURE_SIZE * FEATURE_COUNT)}")
+    print(f"kFeatureStrideMs: {FEATURE_STRIDE_MS}")
+    print(f"kFeatureDurationMs: {FEATURE_DURATION_MS}")
+    print("###########################################\n\n")
+
 remove_specific_files_and_dirs('/tmp', 'CAT_', 'mfcc_')
 
 unzip_file('CAT_SOUND_DB_SAMPLES.zip', '/tmp/CAT_SOUND_DB_SAMPLES')
 
-source_dir = '/tmp/CAT_SOUND_DB_SAMPLES'
-target_dir = '/tmp/CAT_SOUND_DB_SAMPLES_WAV'
-print(f"Converting files from {source_dir} to {target_dir}...")
-copy_and_convert_directory(source_dir, target_dir)
+samples_dir = '/tmp/CAT_SOUND_DB_SAMPLES'
+wav_dir = '/tmp/CAT_SOUND_DB_SAMPLES_WAV'
+std_dir = '/tmp/CAT_SOUND_DB_SAMPLES_STANDARDIZED'
+aug_dir = '/tmp/CAT_SOUND_DB_SAMPLES_AUGMENTED'
 
+print(f"Converting files from {samples_dir} to {wav_dir}...")
+copy_and_convert_directory(samples_dir, wav_dir)
 #
-directory = '/tmp/CAT_SOUND_DB_SAMPLES_WAV'
-get_audio_durations_and_average(directory)
+print(f"Calculating average duration of files in {wav_dir}...")
+average_duration = get_audio_durations_and_average(wav_dir)
 
-#
-walk_directory_for_wav_sampling_rates(directory)
+print(f"Get sampling rates from {wav_dir}...")
+sampling_rates = walk_directory_for_wav_sampling_rates(wav_dir)
 
-# Usage
-source_dir = '/tmp/CAT_SOUND_DB_SAMPLES_WAV'
-target_dir = '/tmp/CAT_SOUND_DB_SAMPLES_AUGMENTED'
-print(f"Augmenting files from {source_dir} to {target_dir}...")
-copy_and_augment_directory(source_dir, target_dir)
+total_samples = average_duration * sampling_rates[0]
+FEATURE_COUNT = 1 + (total_samples - FFT_WINDOW_SIZE) / HOP_LENGTH
+FEATURE_STRIDE_MS = round((HOP_LENGTH / sampling_rates[0]) * 1000, 2)
+FEATURE_DURATION_MS = round((FFT_WINDOW_SIZE / sampling_rates[0]) * 1000, 2)
 
-# Example usage
-directory = '/tmp/CAT_SOUND_DB_SAMPLES_AUGMENTED'
-data = process_directory(directory)
+print(f"Standardizing audio duration in files from {wav_dir} to {std_dir}...")
+standardize_directory_audio_lengths(wav_dir, std_dir, target_length=average_duration, sr=sampling_rates[0])
+
+print(f"Augmenting files from {std_dir} to {aug_dir}...")
+copy_and_augment_directory(std_dir, aug_dir)
+
+data = process_directory(aug_dir)
 
 print(f"There are {len(data)} MFCC features.")
 
@@ -415,7 +492,7 @@ model = create_cnn_model(input_shape, num_classes)
 # Compile the model
 model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
 
-# Print model summary
+print("Model Summary:")
 model.summary()
 
 #
@@ -490,11 +567,5 @@ print(f"Predicted Category: {predicted_category_name}")
 command = "xxd -i cat_sound_model_quant.tflite > cat_sound_model.cc"
 run_shell_command(command)
 
-#
-# constexpr int kAudioSampleFrequency = 16000;
-# constexpr int kFeatureSize = 13;
-# constexpr int kFeatureCount = 49;
-# constexpr int kFeatureElementCount = (kFeatureSize * kFeatureCount);
-# constexpr int kFeatureStrideMs = 20;
-# constexpr int kFeatureDurationMs = 30;
-#
+# Call this function at the beginning of your main script or processing workflow
+print_audio_processing_constants()
