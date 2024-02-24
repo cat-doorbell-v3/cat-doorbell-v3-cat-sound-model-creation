@@ -6,6 +6,7 @@ import wave
 import zipfile
 
 import librosa
+import matplotlib.pyplot as plt
 import numpy as np
 import soundfile as sf
 import tensorflow as tf
@@ -17,10 +18,76 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 
+MODEL_NAME = "cat_sound_model.tflite"
+
 AUDIO_SAMPLING_FREQUENCY = 44100
 FEATURE_SIZE = 13
 FFT_WINDOW_SIZE = 2048
 HOP_LENGTH = 512
+
+AUDIO_CONSTANTS = {
+    "kMaxAudioSampleSize": 0,
+    "kAudioSampleFrequency": AUDIO_SAMPLING_FREQUENCY,
+    "kFeatureSize": FEATURE_SIZE,
+    "kFeatureCount": 0,
+    "kFeatureElementCount": 0,
+    "kFeatureStrideMs": 0,
+    "kFeatureDurationMs": 0
+}
+
+LABEL_MAP = {
+    'Angry': 0, 'Defense': 1, 'Fighting': 2, 'Happy': 3, 'HuntingMind': 4,
+    'Mating': 5, 'MotherCall': 6, 'Paining': 7, 'Resting': 8, 'Warning': 9
+}
+
+
+def generate_header_file(label_map, audio_constants, output_file="cat_sound_model.h"):
+    labels = list(label_map.keys())
+    category_count = len(labels)
+
+    with open(output_file, "w") as f:
+        f.write("#ifndef CAT_SOUND_MODEL_H_\n")
+        f.write("#define CAT_SOUND_MODEL_H_\n\n")
+
+        # Write audio constants
+        for key, value in audio_constants.items():
+            f.write(f"constexpr int {key} = {value};\n")
+        f.write("\n")
+
+        # Write category labels
+        f.write(f"constexpr int kCategoryCount = {category_count};\n")
+        f.write("constexpr const char* kCategoryLabels[kCategoryCount] = {\n")
+        for label in labels:
+            f.write(f'    "{label}",\n')
+        f.write("};\n\n")
+
+        f.write("#endif  // CAT_SOUND_MODEL_H_\n")
+
+
+def get_bit_depth(wav_file_path):
+    try:
+        with wave.open(wav_file_path, 'r') as wav_file:
+            sample_width_bytes = wav_file.getsampwidth()
+            bit_depth = sample_width_bytes * 8  # Convert bytes to bits
+            return bit_depth
+    except wave.Error:
+        print(f"Error reading {wav_file_path}. It might not be a valid WAV file.")
+        return None
+
+
+def walk_directory_for_wavs(directory_path):
+    bit_depths = {}
+    for root, dirs, files in os.walk(directory_path):
+        for file in files:
+            if file.endswith(".wav"):
+                full_path = os.path.join(root, file)
+                bit_depth = get_bit_depth(full_path)
+                if bit_depth:
+                    if bit_depth in bit_depths:
+                        bit_depths[bit_depth].append(full_path)
+                    else:
+                        bit_depths[bit_depth] = [full_path]
+    return bit_depths
 
 
 def standardize_length_and_save(audio_path, target_path, target_length=3.25, sr=44100):
@@ -387,23 +454,6 @@ def representative_dataset_gen():
         yield [np.expand_dims(input_value, axis=0).astype(np.float32)]
 
 
-def print_audio_processing_constants():
-    print("\n\n###########################################")
-    print("Audio INPUT Processing Constants:")
-    print(f"AUDIO_SAMPLING_FREQUENCY: {AUDIO_SAMPLING_FREQUENCY}")
-    print(f"FEATURE_SIZE: {FEATURE_SIZE}")
-    print(f"FFT_WINDOW_SIZE: {FFT_WINDOW_SIZE}")
-    print(f"HOP_LENGTH: {HOP_LENGTH}")
-    print("---\n")
-    print("Audio OUTPUT Processing Constants:")
-    print(f"kAudioSampleFrequency: {AUDIO_SAMPLING_FREQUENCY}")
-    print(f"kFeatureSize: {FEATURE_SIZE}")
-    print(f"kFeatureCount: {round(FEATURE_COUNT)}")
-    print(f"kFeatureElementCount: {round(FEATURE_SIZE * FEATURE_COUNT)}")
-    print(f"kFeatureStrideMs: {FEATURE_STRIDE_MS}")
-    print(f"kFeatureDurationMs: {FEATURE_DURATION_MS}")
-    print("###########################################\n\n")
-
 remove_specific_files_and_dirs('/tmp', 'CAT_', 'mfcc_')
 
 unzip_file('CAT_SOUND_DB_SAMPLES.zip', '/tmp/CAT_SOUND_DB_SAMPLES')
@@ -422,10 +472,22 @@ average_duration = get_audio_durations_and_average(wav_dir)
 print(f"Get sampling rates from {wav_dir}...")
 sampling_rates = walk_directory_for_wav_sampling_rates(wav_dir)
 
+print(f"Get bit depths from {wav_dir}...")
+bit_depths_found = walk_directory_for_wavs(wav_dir)
+
+bit_depth = 0
+for bit_depth, files in bit_depths_found.items():
+    print(f"Found {len(files)} file(s) with a bit depth of {bit_depth} bits:")
+
+DEPTH_BITS = bit_depth
 total_samples = average_duration * sampling_rates[0]
-FEATURE_COUNT = 1 + (total_samples - FFT_WINDOW_SIZE) / HOP_LENGTH
-FEATURE_STRIDE_MS = round((HOP_LENGTH / sampling_rates[0]) * 1000, 2)
-FEATURE_DURATION_MS = round((FFT_WINDOW_SIZE / sampling_rates[0]) * 1000, 2)
+AUDIO_CONSTANTS["kFeatureCount"] = int(1 + (total_samples - FFT_WINDOW_SIZE) / HOP_LENGTH)
+AUDIO_CONSTANTS["kFeatureStrideMs"] = int((HOP_LENGTH / sampling_rates[0]) * 1000)
+AUDIO_CONSTANTS["kFeatureDurationMs"] = int((FFT_WINDOW_SIZE / sampling_rates[0]) * 1000)
+DURATION_SECONDS = 1
+BYTES_PER_SAMPLE = DEPTH_BITS / 8
+AUDIO_CONSTANTS["kMaxAudioSampleSize"] = int(AUDIO_SAMPLING_FREQUENCY * DURATION_SECONDS * BYTES_PER_SAMPLE)
+AUDIO_CONSTANTS["kFeatureElementCount"] = int(AUDIO_CONSTANTS["kFeatureSize"] * AUDIO_CONSTANTS["kFeatureCount"])
 
 print(f"Standardizing audio duration in files from {wav_dir} to {std_dir}...")
 standardize_directory_audio_lengths(wav_dir, std_dir, target_length=average_duration, sr=sampling_rates[0])
@@ -439,12 +501,10 @@ print(f"There are {len(data)} MFCC features.")
 
 features = []
 labels = []
-label_map = {'Angry': 0, 'Defense': 1, 'Fighting': 2, 'Happy': 3, 'HuntingMind': 4,
-             'Mating': 5, 'MotherCall': 6, 'Paining': 7, 'Resting': 8, 'Warning': 9}
 for file_path, mfcc_features in data.items():
     features.append(mfcc_features)
     label = file_path.split('/')[4]  # Assuming the label is in the forth segment of the path
-    labels.append(label_map[label])
+    labels.append(LABEL_MAP[label])
 
 features = np.array(features, dtype=object)
 labels = np.array(labels)
@@ -500,6 +560,24 @@ model.summary()
 #
 history = model.fit(X_train_cnn, y_train_cat, batch_size=32, epochs=30, validation_data=(X_val_cnn, y_val_cat))
 
+# Plot training & validation accuracy values
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('Model Accuracy')
+plt.ylabel('Accuracy')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Validation'], loc='upper left')
+plt.show()
+
+# Plot training & validation loss values
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('Model Loss')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Validation'], loc='upper left')
+plt.show()
+
 #
 # 6. Evaluate the model
 #
@@ -527,13 +605,13 @@ converter.inference_output_type = tf.uint8
 tflite_quant_model = converter.convert()
 
 # Save the fully quantized model
-with open("cat_sound_model_quant.tflite", "wb") as f:
+with open(MODEL_NAME, "wb") as f:
     f.write(tflite_quant_model)
 
 # Following the conversion, you can proceed with the rest of your code to test the TFLite model
 
 # Load the TFLite model and allocate tensors
-interpreter = tf.lite.Interpreter(model_path="cat_sound_model_quant.tflite")
+interpreter = tf.lite.Interpreter(model_path=MODEL_NAME)
 interpreter.allocate_tensors()
 
 # Get input and output tensors
@@ -556,16 +634,8 @@ predicted_category_confidence = np.max(output_data)
 print(f"Predicted Category Index: {predicted_category_index}, Confidence: {predicted_category_confidence:.2f}")
 
 # Assuming `label_map` is a dictionary mapping category names to indexes
-inverse_label_map = {v: k for k, v in label_map.items()}
+inverse_label_map = {v: k for k, v in LABEL_MAP.items()}
 predicted_category_name = inverse_label_map[predicted_category_index]
 print(f"Predicted Category: {predicted_category_name}")
 
-#
-#  7. Save the model
-# xxd -i cat_sound_model_quant.tflite > cat_sound_model.cc
-#
-command = "xxd -i cat_sound_model_quant.tflite > cat_sound_model.cc"
-run_shell_command(command)
-
-# Call this function at the beginning of your main script or processing workflow
-print_audio_processing_constants()
+generate_header_file(LABEL_MAP, AUDIO_CONSTANTS)
