@@ -35,10 +35,42 @@ AUDIO_CONSTANTS = {
     "kFeatureDurationMs": 0
 }
 
-LABEL_MAP = {
+OLD_LABEL_MAP = {
     'Angry': 0, 'Defense': 1, 'Fighting': 2, 'Happy': 3, 'HuntingMind': 4,
     'Mating': 5, 'MotherCall': 6, 'Paining': 7, 'Resting': 8, 'Warning': 9
 }
+
+LABEL_MAP = {
+    'Angry': 0, 'Defense': 1, 'Fighting': 2
+}
+
+IGNORE = [
+    'Happy', 'Mating', 'MotherCall', 'Paining', 'Resting', 'Warning', 'HuntingMind'
+]
+
+
+def plot_training_history(history):
+    # Plot training & validation accuracy values
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['val_accuracy'])
+    plt.title('Model Accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper left')
+
+    # Plot training & validation loss values
+    plt.subplot(1, 2, 2)
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper left')
+
+    plt.tight_layout()
+    plt.show()
 
 
 def generate_header_file(label_map, audio_constants, output_file="cat_sound_model.h"):
@@ -300,19 +332,29 @@ def unzip_file(zip_file_path, extract_to_path):
     print(f"File extracted to {extract_to_path}")
 
 
-def copy_and_convert_directory(source_dir, target_dir):
+def copy_and_convert_directory(source_dir, target_dir, ignore_dirs=[]):
     """
-    Copy the directory structure from source to target and convert all MP3 files to WAV.
+    Copy the directory structure from source to target and convert all MP3 files to WAV,
+    ignoring specific subdirectories.
 
     Parameters:
     - source_dir: The path to the source directory.
     - target_dir: The path to the target directory where you want to copy and convert the files.
+    - ignore_dirs: A list of directory names to ignore. These should be just the directory names,
+                   not the full path.
     """
-    for root, dirs, files in os.walk(source_dir):
+    for root, dirs, files in os.walk(source_dir, topdown=True):
+        # Skip subdirectories that are in the ignore list
+        dirs[:] = [d for d in dirs if d not in ignore_dirs]
+
         # Construct the path to the destination directory
         dest_dir = os.path.join(target_dir, os.path.relpath(root, source_dir))
 
-        # Create the destination directory
+        # Check if the destination directory is within an ignored path
+        if any(ignored_dir in dest_dir for ignored_dir in ignore_dirs):
+            continue
+
+        # Create the destination directory if it does not exist
         os.makedirs(dest_dir, exist_ok=True)
 
         for file in files:
@@ -423,17 +465,16 @@ def save_features(features, output_file='/tmp/mfcc_features.pkl'):
 
 
 def create_cnn_model(input_shape, num_classes):
-    model = Sequential([
-        Conv2D(16, kernel_size=(3, 3), activation='relu', input_shape=input_shape, padding='same'),
+    return Sequential([
+        Conv2D(filters=16, kernel_size=(3, 3), activation='relu', input_shape=input_shape, padding='same'),
         MaxPooling2D(pool_size=(2, 2)),
-        Conv2D(32, (3, 3), activation='relu', padding='same'),
+        Conv2D(filters=32, kernel_size=(3, 3), activation='relu', padding='same'),
         MaxPooling2D(pool_size=(2, 2)),
         Flatten(),
-        Dense(64, activation='relu'),
+        Dense(units=64, activation='relu'),
         Dropout(0.5),
-        Dense(num_classes, activation='softmax')
+        Dense(units=num_classes, activation='softmax')
     ])
-    return model
 
 
 def normalize_features(features):
@@ -464,7 +505,7 @@ std_dir = '/tmp/CAT_SOUND_DB_SAMPLES_STANDARDIZED'
 aug_dir = '/tmp/CAT_SOUND_DB_SAMPLES_AUGMENTED'
 
 print(f"Converting files from {samples_dir} to {wav_dir}...")
-copy_and_convert_directory(samples_dir, wav_dir)
+copy_and_convert_directory(samples_dir, wav_dir, ignore_dirs=IGNORE)
 #
 print(f"Calculating average duration of files in {wav_dir}...")
 average_duration = get_audio_durations_and_average(wav_dir)
@@ -486,7 +527,7 @@ AUDIO_CONSTANTS["kFeatureStrideMs"] = int((HOP_LENGTH / sampling_rates[0]) * 100
 AUDIO_CONSTANTS["kFeatureDurationMs"] = int((FFT_WINDOW_SIZE / sampling_rates[0]) * 1000)
 DURATION_SECONDS = 1
 BYTES_PER_SAMPLE = DEPTH_BITS / 8
-AUDIO_CONSTANTS["kMaxAudioSampleSize"] = int(AUDIO_SAMPLING_FREQUENCY * DURATION_SECONDS * BYTES_PER_SAMPLE)
+AUDIO_CONSTANTS["kMaxAudioSampleSize"] = int((AUDIO_SAMPLING_FREQUENCY / 1000) * AUDIO_CONSTANTS["kFeatureDurationMs"])
 AUDIO_CONSTANTS["kFeatureElementCount"] = int(AUDIO_CONSTANTS["kFeatureSize"] * AUDIO_CONSTANTS["kFeatureCount"])
 
 print(f"Standardizing audio duration in files from {wav_dir} to {std_dir}...")
@@ -507,24 +548,26 @@ for file_path, mfcc_features in data.items():
     labels.append(LABEL_MAP[label])
 
 features = np.array(features, dtype=object)
+# Assuming labels is a NumPy array after this conversion
 labels = np.array(labels)
 
 # Normalize the features before splitting and padding
 features_normalized = normalize_features(features)
 
-#
-# 2. Split the data into training and testing sets
-#
+# Split the dataset into training and a temporary set with stratification
+X_train, X_temp, y_train, y_temp = train_test_split(features_normalized, labels, test_size=0.3, stratify=labels,
+                                                    random_state=42)
 
-# Split the dataset into training, validation, and test sets
-X_train, X_temp, y_train, y_temp = train_test_split(features_normalized, labels, test_size=0.3, random_state=42)
-X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
+# Now split the temporary set into validation and test sets, also with stratification
+X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42)
 
 # Determine the maximum length of the MFCC features in your dataset for padding
-max_length = max([len(feature) for feature in features_normalized])
-X_train = np.array([np.pad(feature, ((0, max_length - len(feature)), (0, 0)), mode='constant') for feature in X_train])
-X_val = np.array([np.pad(feature, ((0, max_length - len(feature)), (0, 0)), mode='constant') for feature in X_val])
-X_test = np.array([np.pad(feature, ((0, max_length - len(feature)), (0, 0)), mode='constant') for feature in X_test])
+max_length = max(len(feature) for feature in features_normalized)
+
+# Apply padding
+X_train = np.array([np.pad(feature, ((0, max_length - len(feature)), (0, 0)), 'constant') for feature in X_train])
+X_val = np.array([np.pad(feature, ((0, max_length - len(feature)), (0, 0)), 'constant') for feature in X_val])
+X_test = np.array([np.pad(feature, ((0, max_length - len(feature)), (0, 0)), 'constant') for feature in X_test])
 
 #
 # 3. Format data for training
@@ -547,64 +590,49 @@ X_test_cnn = np.expand_dims(X_test, -1)
 input_shape = (X_train_cnn.shape[1], X_train_cnn.shape[2], 1)  # (MFCC features, time steps, 1)
 num_classes = y_train_cat.shape[1]
 
+print(f"Input shape: {input_shape}, Number of classes: {num_classes}")
 model = create_cnn_model(input_shape, num_classes)
 
 # Compile the model
 model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
 
-print("Model Summary:")
 model.summary()
 
 #
 # 5. Train the model
 #
 history = model.fit(X_train_cnn, y_train_cat, batch_size=32, epochs=30, validation_data=(X_val_cnn, y_val_cat))
-
-# Plot training & validation accuracy values
-plt.plot(history.history['accuracy'])
-plt.plot(history.history['val_accuracy'])
-plt.title('Model Accuracy')
-plt.ylabel('Accuracy')
-plt.xlabel('Epoch')
-plt.legend(['Train', 'Validation'], loc='upper left')
-plt.show()
-
-# Plot training & validation loss values
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('Model Loss')
-plt.ylabel('Loss')
-plt.xlabel('Epoch')
-plt.legend(['Train', 'Validation'], loc='upper left')
-plt.show()
-
+plot_training_history(history)
 #
 # 6. Evaluate the model
 #
-
 test_loss, test_accuracy = model.evaluate(X_test_cnn, y_test_cat)
 print(f"Test accuracy: {test_accuracy:.4f}, Test loss: {test_loss:.4f}")
 
 # Assuming `model` is your Keras model
 converter = tf.lite.TFLiteConverter.from_keras_model(model)
 
-# To enable full quantization, set the optimizations flag to use default optimizations
+# Enable full integer quantization
 converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
-# Set the representative dataset for quantization
+# Set the representative dataset for calibration
 converter.representative_dataset = representative_dataset_gen
+
+for data in representative_dataset_gen():
+    print(data[0].shape)  # Should match the model's input shape
+    break  # Just to check the first batch
 
 # Ensure that if any ops can't be quantized, the converter throws an error
 converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
 
-# Set the input and output tensors to uint8 (optional)
-converter.inference_input_type = tf.uint8
-converter.inference_output_type = tf.uint8
+# Specify the input and output types to be int8
+converter.inference_input_type = tf.int8
+converter.inference_output_type = tf.int8
 
-# Convert the model
+# Convert the model to a TensorFlow Lite model
 tflite_quant_model = converter.convert()
 
-# Save the fully quantized model
+# Save the quantized model
 with open(MODEL_NAME, "wb") as f:
     f.write(tflite_quant_model)
 
@@ -620,7 +648,7 @@ output_details = interpreter.get_output_details()
 
 # Test the model on input data (example)
 input_shape = input_details[0]['shape']
-input_data = np.array(np.expand_dims(X_test_cnn[0], 0), dtype=np.uint8)
+input_data = np.array(np.expand_dims(X_test_cnn[0], 0), dtype=np.int8)
 interpreter.set_tensor(input_details[0]['index'], input_data)
 
 interpreter.invoke()
@@ -639,3 +667,11 @@ predicted_category_name = inverse_label_map[predicted_category_index]
 print(f"Predicted Category: {predicted_category_name}")
 
 generate_header_file(LABEL_MAP, AUDIO_CONSTANTS)
+
+# Load the TFLite model
+interpreter = tf.lite.Interpreter(model_path=MODEL_NAME)
+interpreter.allocate_tensors()
+
+# Get input tensor details
+input_details = interpreter.get_input_details()
+print(f"Input details for C:\n{input_details}")
