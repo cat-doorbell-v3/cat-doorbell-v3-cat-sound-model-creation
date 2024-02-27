@@ -1,3 +1,43 @@
+"""
+This script is designed for building a Cat Sound Recognition model using
+TensorFlow and Keras, specifically tailored for identifying different contexts
+of cat sounds, such as brushing, isolation, and food-related meows. It processes
+audio files in WAV format, extracts Mel-Frequency Cepstral Coefficients (MFCCs)
+as features, and trains a neural network model. The trained model is then
+converted to TensorFlow Lite (TFLite) format for deployment on low-power devices.
+
+Process overview:
+1. Unzipping and organizing audio files into categories based on their emission
+   context (brushing, isolation, food).
+2. Augmenting the dataset with audio transformations (noise addition, pitch
+   shifting, speed change, time stretching, dynamic range compression) to
+   improve model robustness.
+3. Extracting MFCC features from audio files for neural network input.
+4. Normalizing features and preparing data by splitting into training and
+   validation sets.
+5. Training a neural network with K-Fold cross-validation to select the best
+   model based on validation accuracy.
+6. Converting the best Keras model to a TensorFlow Lite model with integer
+   quantization for efficient deployment.
+7. Generating a C++ header file with model parameters and metadata for embedded
+   system integration.
+
+Dependencies:
+- TensorFlow and Keras for model training and conversion.
+- LibROSA for audio processing and feature extraction.
+- NumPy for numerical computing.
+- Scikit-learn for data preprocessing and model evaluation.
+- SoundFile for audio file reading and writing.
+
+Usage:
+Place your dataset in a ZIP file named 'dataset.zip' in the /tmp directory. The
+script will handle data preprocessing, model training, and conversion. Adjust
+DATA_PATH, MODEL_NAME, and other parameters as needed for your project.
+
+Note:
+This script is optimized for cat sound data and may require adjustments for
+other audio classification tasks.
+"""
 import shutil
 import wave
 import zipfile
@@ -565,7 +605,7 @@ def main():
 
     # Split the dataset into training and a temporary set with stratification
     x_train, _, y_train, _ = train_test_split(features_normalized, labels, test_size=0.3, stratify=labels,
-                                                        random_state=42)
+                                              random_state=42)
 
     # Determine the maximum length of the MFCC features in your dataset for padding
     max_length = max(len(feature) for feature in features_normalized)
