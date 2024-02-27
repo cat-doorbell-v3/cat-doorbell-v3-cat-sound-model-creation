@@ -17,6 +17,8 @@ from tensorflow.keras.utils import to_categorical
 
 MODEL_NAME = "cat_sound_model.tflite"
 
+DATA_PATH = "/tmp/dataset"
+
 AUDIO_SAMPLING_FREQUENCY = 8000
 
 """
@@ -51,7 +53,15 @@ reducing computational demands while providing adequate temporal resolution.
 HOP_LENGTH = 256
 
 LABEL_MAP = {
-    'brushing': 0, 'isolation': 1, 'food': 2
+    'brushing': 0,
+    'isolation': 1,
+    'food': 2
+}
+
+CONTEXTS = {
+    'B': 'brushing',
+    'I': 'isolation',
+    'F': 'food'
 }
 
 
@@ -115,25 +125,23 @@ def organize_meows(directory):
     - None
     """
     # Define the base path and subdirectories
-    base_path = "/tmp/dataset"
-    contexts = {'B': 'brushing', 'I': 'isolation', 'F': 'food'}
 
     # Create the base directory if it doesn't exist
-    os.makedirs(base_path, exist_ok=True)
+    os.makedirs(DATA_PATH, exist_ok=True)
 
     # Create subdirectories for each context
-    for context in contexts.values():
-        os.makedirs(os.path.join(base_path, context), exist_ok=True)
+    for context in CONTEXTS.values():
+        os.makedirs(os.path.join(DATA_PATH, context), exist_ok=True)
 
     # Move files based on the emission context
     for filename in os.listdir(directory):
         if filename.endswith('.wav'):
             context_code = filename.split('_')[0]  # Extract context code from file name
-            target_dir = contexts.get(context_code)  # Determine target directory
+            target_dir = CONTEXTS.get(context_code)  # Determine target directory
             if target_dir:
                 os.rename(
                     os.path.join(directory, filename),
-                    os.path.join(base_path, target_dir, filename)
+                    os.path.join(DATA_PATH, target_dir, filename)
                 )
                 # print(f"Moved {filename} to {target_dir}.")
 
@@ -534,19 +542,19 @@ def main():
 
     unzip_file('dataset.zip', '/tmp')
 
-    organize_meows('/tmp/dataset')
+    organize_meows(DATA_PATH)
 
-    min_duration, max_duration, avg_duration = get_audio_durations_and_average('/tmp/dataset')
+    min_duration, max_duration, avg_duration = get_audio_durations_and_average(DATA_PATH)
 
-    sampling_rates = walk_directory_for_wav_sampling_rates('/tmp/dataset')
+    sampling_rates = walk_directory_for_wav_sampling_rates(DATA_PATH)
 
-    bit_depths_found = walk_directory_for_wav_bit_depth('/tmp/dataset')
+    bit_depths_found = walk_directory_for_wav_bit_depth(DATA_PATH)
 
     print(f"All files have a bit depth of {bit_depths_found} bits:")
 
-    augment_wav_files('/tmp/dataset', sampling_rates[0])
+    augment_wav_files(DATA_PATH, sampling_rates[0])
 
-    mfcc_data = process_directory_for_mfcc_features('/tmp/dataset')
+    mfcc_data = process_directory_for_mfcc_features(DATA_PATH)
 
     print(f"There are {len(mfcc_data)} MFCC features.")
 
