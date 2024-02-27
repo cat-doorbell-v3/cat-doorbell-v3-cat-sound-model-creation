@@ -368,8 +368,8 @@ def pad_features(features, max_length):
     return np.array(padded_features)
 
 
-def representative_dataset_gen(X_train_cnn):
-    for input_value in X_train_cnn[:100]:  # Assuming you're using a subset of your training data
+def representative_dataset_gen(x_train_cnn):
+    for input_value in x_train_cnn[:100]:  # Assuming you're using a subset of your training data
         yield [np.expand_dims(input_value, axis=0).astype(np.float32)]
 
 
@@ -441,12 +441,12 @@ def extract_features_and_labels(mfcc_data, label_map):
     return features, labels
 
 
-def train_and_select_best_model(X_train, y_train, input_shape, num_classes, n_splits=5, patience=4):
+def train_and_select_best_model(x_train, y_train, input_shape, num_classes, n_splits=5, patience=4):
     """
     Trains models using K-Fold cross-validation and returns the best model based on validation accuracy.
 
     Parameters:
-    - X_train: Training data features.
+    - x_train: Training data features.
     - y_train: Training data labels.
     - input_shape: Shape of the input data (excluding the batch size).
     - num_classes: Number of unique classes in the dataset.
@@ -467,7 +467,7 @@ def train_and_select_best_model(X_train, y_train, input_shape, num_classes, n_sp
     best_model = None
 
     fold_no = 1
-    for train, val in kf.split(X_train, y_train):
+    for train, val in kf.split(x_train, y_train):
         # Initialize the model
         model = Sequential([
             Flatten(input_shape=input_shape),
@@ -480,15 +480,15 @@ def train_and_select_best_model(X_train, y_train, input_shape, num_classes, n_sp
         model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
         # Fit the model
-        model.fit(X_train[train], y_train[train],
+        model.fit(x_train[train], y_train[train],
                   batch_size=32,
                   epochs=30,
                   verbose=0,
-                  validation_data=(X_train[val], y_train[val]),
+                  validation_data=(x_train[val], y_train[val]),
                   callbacks=[early_stopping])
 
         # Evaluate the model
-        val_loss, val_accuracy = model.evaluate(X_train[val], y_train[val], verbose=0)
+        val_loss, val_accuracy = model.evaluate(x_train[val], y_train[val], verbose=0)
         print(f'Fold {fold_no} - Loss: {val_loss:.2f} - Accuracy: {val_accuracy * 100:.2f}%')
 
         # Update the best model if current model is better
@@ -505,7 +505,7 @@ def train_and_select_best_model(X_train, y_train, input_shape, num_classes, n_sp
     return best_model
 
 
-def convert_and_save_model_to_tflite(keras_model, X_train_cnn, model_name="converted_model.tflite"):
+def convert_and_save_model_to_tflite(keras_model, x_train_cnn, model_name="converted_model.tflite"):
     # Convert the TensorFlow model to a TensorFlow Lite model with full integer quantization
     converter = tf.lite.TFLiteConverter.from_keras_model(keras_model)
 
@@ -513,7 +513,7 @@ def convert_and_save_model_to_tflite(keras_model, X_train_cnn, model_name="conve
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
     # Provide a representative dataset for calibration
-    converter.representative_dataset = lambda: representative_dataset_gen(X_train_cnn)
+    converter.representative_dataset = lambda: representative_dataset_gen(x_train_cnn)
 
     # Ensure the converter generates a model compatible with integer-only input and output
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
@@ -556,11 +556,11 @@ def main():
     features_normalized = normalize_features(features)
 
     # Split the dataset into training and a temporary set with stratification
-    X_train, X_temp, y_train, y_temp = train_test_split(features_normalized, labels, test_size=0.3, stratify=labels,
+    x_train, x_temp, y_train, y_temp = train_test_split(features_normalized, labels, test_size=0.3, stratify=labels,
                                                         random_state=42)
 
     # Now split the temporary set into validation and test sets, also with stratification
-    X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42)
+    x_val, x_test, y_val, y_test = train_test_split(x_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42)
 
     # Determine the maximum length of the MFCC features in your dataset for padding
     # Assuming features_normalized is a list of all feature arrays
@@ -568,33 +568,20 @@ def main():
     print(f"Maximum length of MFCC features: {max_length}")
 
     # Apply padding
-    X_train = pad_features(X_train, max_length)
-    X_val = pad_features(X_val, max_length)
-    X_test = pad_features(X_test, max_length)
+    x_train = pad_features(x_train, max_length)
 
-    # Convert labels to categorical (one-hot encoding)
     y_train_cat = to_categorical(y_train)
-    y_val_cat = to_categorical(y_val)
-    y_test_cat = to_categorical(y_test)
 
-    # Assuming X_train has already been reshaped to fit the CNN input requirements
-    # For CNNs, TensorFlow expects the data to be in the format of (samples, rows, cols, channels)
-    # Since MFCC features have only one channel, we need to expand the dimensions of our data
-    X_train_cnn = np.expand_dims(X_train, -1)
-    X_val_cnn = np.expand_dims(X_val, -1)
-    X_test_cnn = np.expand_dims(X_test, -1)
+    x_train_cnn = np.expand_dims(x_train, -1)
 
-    input_shape = (X_train_cnn.shape[1], X_train_cnn.shape[2], 1)  # (MFCC features, time steps, 1)
+    input_shape = (x_train_cnn.shape[1], x_train_cnn.shape[2], 1)  # (MFCC features, time steps, 1)
     num_classes = y_train_cat.shape[1]
 
     print(f"Input shape: {input_shape}, Number of classes: {num_classes}")
 
-    input_dimension = X_train_cnn.shape[1]
-    print(f"Input dimension: {input_dimension}")
+    best_model = train_and_select_best_model(x_train_cnn, y_train_cat, input_shape, num_classes)
 
-    best_model = train_and_select_best_model(X_train_cnn, y_train_cat, input_shape, num_classes)
-
-    convert_and_save_model_to_tflite(best_model, X_train_cnn, "cat_sound_model.tflite")
+    convert_and_save_model_to_tflite(best_model, x_train_cnn, "cat_sound_model.tflite")
 
     audio_constants = generate_cpp_definitions(FEATURE_SIZE, AUDIO_SAMPLING_FREQUENCY, avg_duration,
                                                FFT_WINDOW_SIZE, HOP_LENGTH)
