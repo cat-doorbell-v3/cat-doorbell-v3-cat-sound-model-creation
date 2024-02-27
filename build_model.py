@@ -1,7 +1,5 @@
 import os
-import pickle
 import shutil
-import subprocess
 import wave
 import zipfile
 
@@ -10,12 +8,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import soundfile as sf
 import tensorflow as tf
+from keras.callbacks import EarlyStopping
+from keras.regularizers import l2
 from pydub import AudioSegment
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from tensorflow.keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropout
+from tensorflow.keras.layers import Dense, Flatten, Dropout
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 
 MODEL_NAME = "cat_sound_model.tflite"
@@ -35,12 +34,12 @@ AUDIO_CONSTANTS = {
     "kFeatureDurationMs": 0
 }
 
-OLD_LABEL_MAP = {
+LABEL_MAP = {
     'Angry': 0, 'Defense': 1, 'Fighting': 2, 'Happy': 3, 'HuntingMind': 4,
     'Mating': 5, 'MotherCall': 6, 'Paining': 7, 'Resting': 8, 'Warning': 9
 }
 
-LABEL_MAP = {
+NEW_LABEL_MAP = {
     'Angry': 0, 'Defense': 1, 'Fighting': 2
 }
 
@@ -229,58 +228,6 @@ def get_audio_durations_and_average(directory_path):
     return average_duration
 
 
-def get_audio_duration(file_path):
-    """
-    Returns the duration of the audio file in seconds.
-
-    Args:
-    file_path (str): Path to the audio file.
-
-    Returns:
-    float: Duration of the audio file in seconds.
-    """
-    y, sr = librosa.load(file_path, sr=None)  # Load the file with its original sampling rate
-    duration = librosa.get_duration(y=y, sr=sr)
-    return duration
-
-
-def walk_and_get_durations(directory):
-    """
-    Walks through a directory, calculating the duration of all .wav files.
-
-    Args:
-    directory (str): The directory to walk through.
-
-    Returns:
-    None
-    """
-    total_duration = 0
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.lower().endswith('.wav'):
-                file_path = os.path.join(root, file)
-                duration = get_audio_duration(file_path)
-                print(f"File: {file_path}, Duration: {duration} seconds")
-                total_duration += duration
-    print(f"Total duration of all .wav files: {total_duration} seconds")
-
-
-def run_shell_command(command):
-    """
-    Runs a shell command.
-
-    Args:
-    command (str): The command to run.
-
-    Returns:
-    None
-    """
-    try:
-        # Run the command
-        subprocess.run(command, check=True, shell=True)
-        print("Command executed successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"An error occurred while executing the command: {e}")
 
 
 def remove_specific_files_and_dirs(base_directory, dir_prefix, file_prefix):
@@ -451,32 +398,6 @@ def process_directory(directory):
 
     return features
 
-
-def save_features(features, output_file='/tmp/mfcc_features.pkl'):
-    """
-    Save the extracted features to a file.
-
-    Parameters:
-    - features: The dictionary of features to save.
-    - output_file: The path to the output file.
-    """
-    with open(output_file, 'wb') as f:
-        pickle.dump(features, f)
-
-
-def create_cnn_model(input_shape, num_classes):
-    return Sequential([
-        Conv2D(filters=16, kernel_size=(3, 3), activation='relu', input_shape=input_shape, padding='same'),
-        MaxPooling2D(pool_size=(2, 2)),
-        Conv2D(filters=32, kernel_size=(3, 3), activation='relu', padding='same'),
-        MaxPooling2D(pool_size=(2, 2)),
-        Flatten(),
-        Dense(units=64, activation='relu'),
-        Dropout(0.5),
-        Dense(units=num_classes, activation='softmax')
-    ])
-
-
 def normalize_features(features):
     normalized_features = []
     for feature in features:
@@ -591,17 +512,33 @@ input_shape = (X_train_cnn.shape[1], X_train_cnn.shape[2], 1)  # (MFCC features,
 num_classes = y_train_cat.shape[1]
 
 print(f"Input shape: {input_shape}, Number of classes: {num_classes}")
-model = create_cnn_model(input_shape, num_classes)
+
+input_dimension = X_train_cnn.shape[1]
+
+model = Sequential()
+model.add(Flatten(input_shape=(119, 13, 1)))  # Adjust the input_shape to match your data
+model.add(Dense(64, activation='relu', kernel_regularizer=l2(0.01)))
+model.add(Dropout(0.5))
+model.add(Dense(32, activation='relu', kernel_regularizer=l2(0.01)))
+model.add(Dropout(0.5))
+model.add(Dense(num_classes, activation='softmax'))
 
 # Compile the model
-model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
-
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+print("model compiled. Here is the summary:")
 model.summary()
+print("end model summary")
 
 #
 # 5. Train the model
 #
-history = model.fit(X_train_cnn, y_train_cat, batch_size=32, epochs=30, validation_data=(X_val_cnn, y_val_cat))
+
+# Define early stopping callback
+early_stopping = EarlyStopping(monitor='val_loss', patience=5)
+
+# Fit the model with early stopping
+history = model.fit(X_train_cnn, y_train_cat, batch_size=32, epochs=30, validation_data=(X_val_cnn, y_val_cat),
+                    callbacks=[early_stopping])
 plot_training_history(history)
 #
 # 6. Evaluate the model
@@ -636,42 +573,13 @@ tflite_quant_model = converter.convert()
 with open(MODEL_NAME, "wb") as f:
     f.write(tflite_quant_model)
 
-# Following the conversion, you can proceed with the rest of your code to test the TFLite model
-
-# Load the TFLite model and allocate tensors
-interpreter = tf.lite.Interpreter(model_path=MODEL_NAME)
-interpreter.allocate_tensors()
-
-# Get input and output tensors
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
-
-# Test the model on input data (example)
-input_shape = input_details[0]['shape']
-input_data = np.array(np.expand_dims(X_test_cnn[0], 0), dtype=np.int8)
-interpreter.set_tensor(input_details[0]['index'], input_data)
-
-interpreter.invoke()
-
-# Extract the output
-output_data = interpreter.get_tensor(output_details[0]['index'])
-print(output_data)
-
-predicted_category_index = np.argmax(output_data)
-predicted_category_confidence = np.max(output_data)
-print(f"Predicted Category Index: {predicted_category_index}, Confidence: {predicted_category_confidence:.2f}")
-
-# Assuming `label_map` is a dictionary mapping category names to indexes
-inverse_label_map = {v: k for k, v in LABEL_MAP.items()}
-predicted_category_name = inverse_label_map[predicted_category_index]
-print(f"Predicted Category: {predicted_category_name}")
-
 generate_header_file(LABEL_MAP, AUDIO_CONSTANTS)
 
-# Load the TFLite model
-interpreter = tf.lite.Interpreter(model_path=MODEL_NAME)
-interpreter.allocate_tensors()
-
-# Get input tensor details
-input_details = interpreter.get_input_details()
-print(f"Input details for C:\n{input_details}")
+#
+# # Load the TFLite model
+# interpreter = tf.lite.Interpreter(model_path=MODEL_NAME)
+# interpreter.allocate_tensors()
+#
+# # Get input tensor details
+# input_details = interpreter.get_input_details()
+# print(f"Input details for C:\n{input_details}")
