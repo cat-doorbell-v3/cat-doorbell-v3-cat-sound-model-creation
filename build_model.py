@@ -15,6 +15,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.layers import Dense, Flatten, Dropout
 from tensorflow.keras.models import Sequential
+from tensorflow.keras.regularizers import l1_l2
 from tensorflow.keras.utils import to_categorical
 
 MODEL_NAME = "cat_sound_model.tflite"
@@ -561,8 +562,8 @@ for train, val in kf.split(X_train_cnn, y_train_cat):
     # Define the model architecture (re-initialize for each fold)
     model = Sequential()
     model.add(Flatten(input_shape=input_shape))
-    model.add(Dense(64, activation='relu'))  # Reduced from 64 to 32 neurons
-    model.add(Dropout(0.5))
+    model.add(Dense(64, activation='relu', kernel_regularizer=l1_l2(l1=0.01, l2=0.01)))
+    model.add(Dropout(0.3))
     # Removed one Dense layer here
     model.add(Dense(num_classes, activation='softmax'))
 
@@ -582,7 +583,7 @@ for train, val in kf.split(X_train_cnn, y_train_cat):
 
     # Evaluate the model on the validation set
     val_loss, val_accuracy = model.evaluate(X_train_cnn[val], y_train_cat[val], verbose=0)
-    print(f'Fold {fold_no} - Loss: {val_loss} - Accuracy: {val_accuracy * 100}%')
+    print(f'Fold {fold_no} - Loss: {round(val_loss, 2)} - Accuracy: {round(val_accuracy * 100, 2)}%')
     # Append scores
     loss_per_fold.append(val_loss)
     acc_per_fold.append(val_accuracy)
@@ -603,11 +604,11 @@ print('------------------------------------------------------------------------'
 print('Score per fold')
 for i in range(0, len(acc_per_fold)):
     print('------------------------------------------------------------------------')
-    print(f'> Fold {i + 1} - Loss: {loss_per_fold[i]} - Accuracy: {acc_per_fold[i]}%')
+    print(f'> Fold {i + 1} - Loss: {loss_per_fold[i]} - Accuracy: {round(acc_per_fold[i], 2)}%')
 print('------------------------------------------------------------------------')
 print('Average scores for all folds:')
-print(f'> Accuracy: {np.mean(acc_per_fold)} (+- {np.std(acc_per_fold)})')
-print(f'> Loss: {np.mean(loss_per_fold)}')
+print(f'> Accuracy: {round(np.mean(acc_per_fold), 2)} (+- {round(np.std(acc_per_fold), 2)})')
+print(f'> Loss: {round(np.mean(loss_per_fold), 2)}')
 print('------------------------------------------------------------------------')
 
 # After all folds are complete, you can convert the best model to TensorFlow Lite
