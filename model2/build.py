@@ -238,20 +238,38 @@ def change_speed(data, speed_factor=1.25):
     return np.interp(np.arange(0, len(data), speed_factor), np.arange(0, len(data)), data)
 
 
+def time_stretch(data, rate=1.25):
+    return librosa.effects.time_stretch(data, rate=rate)
+
+
+def dynamic_range_compression(data, compression_factor=0.5):
+    # Ensure data is in float format
+    data = data.astype(float)
+    # Apply compression
+    return np.sign(data) * np.log1p(compression_factor * np.abs(data))
+
 def augment_and_save(file_path, sampling_rate):
     data, _ = librosa.load(file_path, sr=sampling_rate)
+
+    # Existing augmentations
     noise_data = add_noise(data)
     pitch_shifted_data = shift_pitch(data, sampling_rate)
     speed_changed_data = change_speed(data)
 
+    # New augmentations
+    time_stretched_data = time_stretch(data)
+    compressed_data = dynamic_range_compression(data)
+
     base_name = os.path.splitext(os.path.basename(file_path))[0]
     dir_name = os.path.dirname(file_path)
 
-    # Save augmented files alongside the original file in the same directory
+    # Save files
     sf.write(os.path.join(dir_name, f"{base_name}_original.wav"), data, sampling_rate)
     sf.write(os.path.join(dir_name, f"{base_name}_noise.wav"), noise_data, sampling_rate)
     sf.write(os.path.join(dir_name, f"{base_name}_pitch.wav"), pitch_shifted_data, sampling_rate)
     sf.write(os.path.join(dir_name, f"{base_name}_speed.wav"), speed_changed_data, sampling_rate)
+    sf.write(os.path.join(dir_name, f"{base_name}_timestretch.wav"), time_stretched_data, sampling_rate)
+    sf.write(os.path.join(dir_name, f"{base_name}_compressed.wav"), compressed_data, sampling_rate)
 
 
 def augment_wav_files(source_dir, sampling_rate):
