@@ -221,6 +221,12 @@ def walk_directory_for_wav_bit_depth(directory_path):
                         bit_depths[bit_depth].append(full_path)
                     else:
                         bit_depths[bit_depth] = [full_path]
+
+    # Check if bit_depths contains only one entry
+    if len(bit_depths) == 1:
+        # Return just the bit depth value
+        return list(bit_depths.keys())[0]
+
     return bit_depths
 
 
@@ -405,6 +411,135 @@ def generate_header_file(label_map, audio_constants, output_file="cat_sound_mode
         f.write("#endif  // CAT_SOUND_MODEL_H_\n")
 
 
+def extract_features_and_labels(mfcc_data, label_map):
+    """
+    Extracts features and labels from the mfcc_data dictionary.
+
+    Parameters:
+    - mfcc_data: Dictionary with file paths as keys and MFCC features as values.
+    - label_map: Dictionary mapping label names to numerical values.
+
+    Returns:
+    - features: NumPy array of MFCC features.
+    - labels: NumPy array of numerical labels.
+    """
+    features = []
+    labels = []
+
+    for file_path, mfcc_features in mfcc_data.items():
+        # Assuming the label is in the fourth position of the path split
+        label_name = file_path.split('/')[3]
+        label = label_map.get(label_name)
+
+        if label is not None:
+            features.append(mfcc_features)
+            labels.append(label)
+
+    features = np.array(features, dtype=object)
+    labels = np.array(labels)
+
+    return features, labels
+
+
+def train_and_select_best_model(X_train, y_train, input_shape, num_classes, n_splits=5, patience=4):
+    """
+    Trains models using K-Fold cross-validation and returns the best model based on validation accuracy.
+
+    Parameters:
+    - X_train: Training data features.
+    - y_train: Training data labels.
+    - input_shape: Shape of the input data (excluding the batch size).
+    - num_classes: Number of unique classes in the dataset.
+    - n_splits: Number of folds for K-Fold cross-validation.
+    - patience: Number of epochs with no improvement after which training will be stopped.
+
+    Returns:
+    - best_model: The Keras model with the highest validation accuracy.
+    """
+
+    # Define early stopping callback
+    early_stopping = EarlyStopping(monitor='val_loss', patience=patience)
+
+    # Define the KFold cross-validator
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+
+    best_score = -np.inf
+    best_model = None
+
+    fold_no = 1
+    for train, val in kf.split(X_train, y_train):
+        # Initialize the model
+        model = Sequential([
+            Flatten(input_shape=input_shape),
+            Dense(64, activation='relu', kernel_regularizer=l1_l2(l1=0.01, l2=0.01)),
+            Dropout(0.3),
+            Dense(num_classes, activation='softmax')
+        ])
+
+        # Compile the model
+        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+        # Fit the model
+        model.fit(X_train[train], y_train[train],
+                  batch_size=32,
+                  epochs=30,
+                  verbose=0,
+                  validation_data=(X_train[val], y_train[val]),
+                  callbacks=[early_stopping])
+
+        # Evaluate the model
+        val_loss, val_accuracy = model.evaluate(X_train[val], y_train[val], verbose=0)
+        print(f'Fold {fold_no} - Loss: {val_loss:.2f} - Accuracy: {val_accuracy * 100:.2f}%')
+
+        # Update the best model if current model is better
+        if val_accuracy > best_score:
+            best_score = val_accuracy
+            best_model = model
+
+        fold_no += 1
+
+    # Optionally save the best model to a file
+    best_model.save('best_model.keras')
+
+    print(f'Best model selected from fold {fold_no} with accuracy: {best_score * 100:.2f}%')
+    return best_model
+
+
+def convert_and_save_model_to_tflite(keras_model, representative_data_gen, model_name="converted_model.tflite"):
+    """
+    Converts a Keras model to a TensorFlow Lite model with full integer quantization and saves it to a file.
+
+    Parameters:
+    - keras_model: The TensorFlow Keras model to be converted.
+    - representative_data_gen: A generator function that provides input data for the model, used during the
+      quantization process to calibrate the model for integer-only inference.
+    - model_name: The name of the file where the TensorFlow Lite model will be saved.
+
+    This function doesn't return anything but saves the converted model to the specified file name.
+    """
+    # Convert the TensorFlow model to a TensorFlow Lite model with full integer quantization
+    converter = tf.lite.TFLiteConverter.from_keras_model(keras_model)
+
+    # Specify optimizations for the converter to perform
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+
+    # Provide a representative dataset for calibration
+    converter.representative_dataset = representative_data_gen
+
+    # Ensure the converter generates a model compatible with integer-only input and output
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.int8  # Set input type to int8
+    converter.inference_output_type = tf.int8  # Set output type to int8
+
+    # Convert the model
+    tflite_model_quant = converter.convert()
+
+    # Save the quantized model to a file
+    with open(model_name, "wb") as f:
+        f.write(tflite_model_quant)
+    print(f"Model saved to {model_name}")
+
+
 remove_directories(['dataset', 'sounds'])
 
 unzip_file('dataset.zip', '/tmp')
@@ -417,9 +552,7 @@ sampling_rates = walk_directory_for_wav_sampling_rates('/tmp/dataset')
 
 bit_depths_found = walk_directory_for_wav_bit_depth('/tmp/dataset')
 
-bit_depth = 0
-for bit_depth, files in bit_depths_found.items():
-    print(f"Found {len(files)} file(s) with a bit depth of {bit_depth} bits:")
+print(f"All files have a bit depth of {bit_depths_found} bits:")
 
 augment_wav_files('/tmp/dataset', sampling_rates[0])
 
@@ -427,17 +560,7 @@ mfcc_data = process_directory_for_mfcc_features('/tmp/dataset')
 
 print(f"There are {len(mfcc_data)} MFCC features.")
 
-features = []
-labels = []
-for file_path, mfcc_features in mfcc_data.items():
-    features.append(mfcc_features)
-    label = file_path.split('/')[3]
-    labels.append(LABEL_MAP[label])
-
-features = np.array(features, dtype=object)
-
-# Assuming labels is a NumPy array after this conversion
-labels = np.array(labels)
+features, labels = extract_features_and_labels(mfcc_data, LABEL_MAP)
 
 # Normalize the features before splitting and padding
 features_normalized = normalize_features(features)
@@ -477,98 +600,11 @@ num_classes = y_train_cat.shape[1]
 print(f"Input shape: {input_shape}, Number of classes: {num_classes}")
 
 input_dimension = X_train_cnn.shape[1]
+print(f"Input dimension: {input_dimension}")
 
-# Define early stopping callback
-early_stopping = EarlyStopping(monitor='val_loss', patience=4)
+best_model = train_and_select_best_model(X_train_cnn, y_train_cat, input_shape, num_classes)
 
-# Define the KFold cross-validator
-n_splits = 5  # Define the number of folds
-kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-
-# Prepare to collect the scores
-fold_no = 1
-loss_per_fold = []
-acc_per_fold = []
-best_score = -np.inf
-best_model = None
-best_fold = None
-
-for train, val in kf.split(X_train_cnn, y_train_cat):
-    # Define the model architecture (re-initialize for each fold)
-    model = Sequential()
-    model.add(Flatten(input_shape=input_shape))
-    model.add(Dense(64, activation='relu', kernel_regularizer=l1_l2(l1=0.01, l2=0.01)))
-    model.add(Dropout(0.3))
-    # Removed one Dense layer here
-    model.add(Dense(num_classes, activation='softmax'))
-
-    # Compile the model
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-
-    # Generate a print
-    print(f'Training for fold {fold_no} ...')
-
-    # Fit the model
-    history = model.fit(X_train_cnn[train], y_train_cat[train],
-                        batch_size=32,
-                        epochs=30,
-                        verbose=0,
-                        validation_data=(X_train_cnn[val], y_train_cat[val]),
-                        callbacks=[early_stopping])
-
-    # Evaluate the model on the validation set
-    val_loss, val_accuracy = model.evaluate(X_train_cnn[val], y_train_cat[val], verbose=0)
-    print(f'Fold {fold_no} - Loss: {round(val_loss, 2)} - Accuracy: {round(val_accuracy * 100, 2)}%')
-    # Append scores
-    loss_per_fold.append(val_loss)
-    acc_per_fold.append(val_accuracy)
-
-    # Check if the current fold's model is the best so far
-    if val_accuracy > best_score:
-        best_score = val_accuracy
-        best_fold = fold_no
-        # Save the best model
-        best_model = model
-        # Optionally, you can save the best model to a file immediately
-        best_model.save('best_model.keras')
-
-    fold_no += 1
-
-# == Provide average scores ==
-print('------------------------------------------------------------------------')
-print('Score per fold')
-for i in range(0, len(acc_per_fold)):
-    print('------------------------------------------------------------------------')
-    print(f'> Fold {i + 1} - Loss: {loss_per_fold[i]} - Accuracy: {round(acc_per_fold[i], 2)}%')
-print('------------------------------------------------------------------------')
-print('Average scores for all folds:')
-print(f'> Accuracy: {round(np.mean(acc_per_fold), 2)} (+- {round(np.std(acc_per_fold), 2)})')
-print(f'> Loss: {round(np.mean(loss_per_fold), 2)}')
-print('------------------------------------------------------------------------')
-
-# After all folds are complete, you can convert the best model to TensorFlow Lite with int8 quantization
-if best_model:
-    # Convert the TensorFlow model to a TensorFlow Lite model with full integer quantization
-    converter = tf.lite.TFLiteConverter.from_keras_model(best_model)
-
-    # Specify that the model uses default float32 input and output for compatibility with the quantization process
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
-
-    # Use the representative dataset for calibration
-    converter.representative_dataset = representative_dataset_gen
-
-    # Ensure that the converter generates a model that uses integer-only input and output
-    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-    converter.inference_input_type = tf.int8  # Set input type to int8
-    converter.inference_output_type = tf.int8  # Set output type to int8
-
-    tflite_model_quant = converter.convert()
-
-    # Save the quantized model
-    with open(MODEL_NAME, "wb") as f:
-        f.write(tflite_model_quant)
-
-    print(f"The best model was from fold {best_fold} with an accuracy of {round(best_score * 100, 2)}%")
+convert_and_save_model_to_tflite(best_model, representative_dataset_gen, "cat_sound_model.tflite")
 
 audio_constants = generate_cpp_definitions(FEATURE_SIZE, AUDIO_SAMPLING_FREQUENCY, avg_duration,
                                            FFT_WINDOW_SIZE, HOP_LENGTH)
