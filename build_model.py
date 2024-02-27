@@ -198,7 +198,6 @@ def get_audio_durations_and_average(directory_path):
     None
     """
     durations = []
-    average_duration = None
 
     for root, dirs, files in os.walk(directory_path):
         for file in files:
@@ -217,8 +216,9 @@ def get_audio_durations_and_average(directory_path):
         print(f"Average Duration: {average_duration:.2f} seconds")
     else:
         print("No .wav files found in the directory.")
+        return None, None, None
 
-    return average_duration
+    return min_duration, max_duration, average_duration
 
 
 
@@ -450,8 +450,10 @@ aug_dir = '/tmp/CAT_SOUND_DB_SAMPLES_AUGMENTED'
 print(f"Converting files from {samples_dir} to {wav_dir}...")
 copy_and_convert_directory(samples_dir, wav_dir)
 #
-print(f"Calculating average duration of files in {wav_dir}...")
-average_duration = get_audio_durations_and_average(wav_dir)
+print(f"Calculating duration of files in {wav_dir}...")
+min_duration, max_duration, avg_duration = get_audio_durations_and_average(wav_dir)
+
+target_duration = max_duration
 
 print(f"Get sampling rates from {wav_dir}...")
 sampling_rates = walk_directory_for_wav_sampling_rates(wav_dir)
@@ -463,18 +465,8 @@ bit_depth = 0
 for bit_depth, files in bit_depths_found.items():
     print(f"Found {len(files)} file(s) with a bit depth of {bit_depth} bits:")
 
-DEPTH_BITS = bit_depth
-total_samples = average_duration * sampling_rates[0]
-AUDIO_CONSTANTS["kFeatureCount"] = int(1 + (total_samples - FFT_WINDOW_SIZE) / HOP_LENGTH)
-AUDIO_CONSTANTS["kFeatureStrideMs"] = int((HOP_LENGTH / sampling_rates[0]) * 1000)
-AUDIO_CONSTANTS["kFeatureDurationMs"] = int((FFT_WINDOW_SIZE / sampling_rates[0]) * 1000)
-DURATION_SECONDS = 1
-BYTES_PER_SAMPLE = DEPTH_BITS / 8
-AUDIO_CONSTANTS["kMaxAudioSampleSize"] = int((AUDIO_SAMPLING_FREQUENCY / 1000) * AUDIO_CONSTANTS["kFeatureDurationMs"])
-AUDIO_CONSTANTS["kFeatureElementCount"] = int(AUDIO_CONSTANTS["kFeatureSize"] * AUDIO_CONSTANTS["kFeatureCount"])
-
 print(f"Standardizing audio duration in files from {wav_dir} to {std_dir}...")
-standardize_directory_audio_lengths(wav_dir, std_dir, target_length=average_duration, sr=sampling_rates[0])
+standardize_directory_audio_lengths(wav_dir, std_dir, target_length=target_duration, sr=sampling_rates[0])
 
 print(f"Augmenting files from {std_dir} to {aug_dir}...")
 copy_and_augment_directory(std_dir, aug_dir)
@@ -482,6 +474,16 @@ copy_and_augment_directory(std_dir, aug_dir)
 data = process_directory(aug_dir)
 
 print(f"There are {len(data)} MFCC features.")
+
+DEPTH_BITS = bit_depth
+total_samples = target_duration * sampling_rates[0]
+AUDIO_CONSTANTS["kFeatureCount"] = int(1 + (total_samples - FFT_WINDOW_SIZE) / HOP_LENGTH)
+AUDIO_CONSTANTS["kFeatureStrideMs"] = int((HOP_LENGTH / sampling_rates[0]) * 1000)
+AUDIO_CONSTANTS["kFeatureDurationMs"] = int((FFT_WINDOW_SIZE / sampling_rates[0]) * 1000)
+DURATION_SECONDS = 1
+BYTES_PER_SAMPLE = DEPTH_BITS / 8
+AUDIO_CONSTANTS["kMaxAudioSampleSize"] = int((AUDIO_SAMPLING_FREQUENCY / 1000) * AUDIO_CONSTANTS["kFeatureDurationMs"])
+AUDIO_CONSTANTS["kFeatureElementCount"] = int(AUDIO_CONSTANTS["kFeatureSize"] * AUDIO_CONSTANTS["kFeatureCount"])
 
 features = []
 labels = []
@@ -611,15 +613,28 @@ print(f'> Accuracy: {round(np.mean(acc_per_fold), 2)} (+- {round(np.std(acc_per_
 print(f'> Loss: {round(np.mean(loss_per_fold), 2)}')
 print('------------------------------------------------------------------------')
 
-# After all folds are complete, you can convert the best model to TensorFlow Lite
+# After all folds are complete, you can convert the best model to TensorFlow Lite with int8 quantization
 if best_model:
+    # Convert the TensorFlow model to a TensorFlow Lite model with full integer quantization
     converter = tf.lite.TFLiteConverter.from_keras_model(best_model)
-    tflite_best_model = converter.convert()
 
-    # Save the best model's TFLite version
+    # Specify that the model uses default float32 input and output for compatibility with the quantization process
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+
+    # Use the representative dataset for calibration
+    converter.representative_dataset = representative_dataset_gen
+
+    # Ensure that the converter generates a model that uses integer-only input and output
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.int8  # Set input type to int8
+    converter.inference_output_type = tf.int8  # Set output type to int8
+
+    tflite_model_quant = converter.convert()
+
+    # Save the quantized model
     with open(MODEL_NAME, "wb") as f:
-        f.write(tflite_best_model)
+        f.write(tflite_model_quant)
 
-    print(f"The best model was from fold {best_fold} with an accuracy of {best_score * 100}%")
+    print(f"The best model was from fold {best_fold} with an accuracy of {round(best_score * 100, 2)}%")
 #
 generate_header_file(LABEL_MAP, AUDIO_CONSTANTS)
