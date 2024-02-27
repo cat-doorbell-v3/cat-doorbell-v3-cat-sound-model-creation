@@ -9,8 +9,8 @@ import numpy as np
 import soundfile as sf
 import tensorflow as tf
 from keras.callbacks import EarlyStopping
-from keras.regularizers import l2
 from pydub import AudioSegment
+from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.layers import Dense, Flatten, Dropout
@@ -38,14 +38,6 @@ LABEL_MAP = {
     'Angry': 0, 'Defense': 1, 'Fighting': 2, 'Happy': 3, 'HuntingMind': 4,
     'Mating': 5, 'MotherCall': 6, 'Paining': 7, 'Resting': 8, 'Warning': 9
 }
-
-NEW_LABEL_MAP = {
-    'Angry': 0, 'Defense': 1, 'Fighting': 2
-}
-
-IGNORE = [
-    'Happy', 'Mating', 'MotherCall', 'Paining', 'Resting', 'Warning', 'HuntingMind'
-]
 
 
 def plot_training_history(history):
@@ -416,6 +408,35 @@ def representative_dataset_gen():
         yield [np.expand_dims(input_value, axis=0).astype(np.float32)]
 
 
+def pad_features(features, max_length):
+    """
+    Pads or trims the feature arrays so that they all have the same length.
+
+    Args:
+    features (list): A list of feature arrays.
+    max_length (int): The length to which the feature arrays will be padded or trimmed.
+
+    Returns:
+    np.array: An array of features adjusted to have the same length.
+    """
+    padded_features = []
+
+    for feature in features:
+        if len(feature) < max_length:
+            # Pad the feature array if it's shorter than the max_length
+            padding = ((0, max_length - len(feature)), (0, 0))
+            feature_padded = np.pad(feature, padding, 'constant', constant_values=0)
+        elif len(feature) > max_length:
+            # Trim the feature array if it's longer than the max_length
+            feature_padded = feature[:max_length]
+        else:
+            # If the feature is already the correct length, use it as is
+            feature_padded = feature
+        padded_features.append(feature_padded)
+
+    return np.array(padded_features)
+
+
 remove_specific_files_and_dirs('/tmp', 'CAT_', 'mfcc_')
 
 unzip_file('CAT_SOUND_DB_SAMPLES.zip', '/tmp/CAT_SOUND_DB_SAMPLES')
@@ -426,7 +447,7 @@ std_dir = '/tmp/CAT_SOUND_DB_SAMPLES_STANDARDIZED'
 aug_dir = '/tmp/CAT_SOUND_DB_SAMPLES_AUGMENTED'
 
 print(f"Converting files from {samples_dir} to {wav_dir}...")
-copy_and_convert_directory(samples_dir, wav_dir, ignore_dirs=IGNORE)
+copy_and_convert_directory(samples_dir, wav_dir)
 #
 print(f"Calculating average duration of files in {wav_dir}...")
 average_duration = get_audio_durations_and_average(wav_dir)
@@ -483,12 +504,14 @@ X_train, X_temp, y_train, y_temp = train_test_split(features_normalized, labels,
 X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42)
 
 # Determine the maximum length of the MFCC features in your dataset for padding
+# Assuming features_normalized is a list of all feature arrays
 max_length = max(len(feature) for feature in features_normalized)
+print(f"Maximum length of MFCC features: {max_length}")
 
 # Apply padding
-X_train = np.array([np.pad(feature, ((0, max_length - len(feature)), (0, 0)), 'constant') for feature in X_train])
-X_val = np.array([np.pad(feature, ((0, max_length - len(feature)), (0, 0)), 'constant') for feature in X_val])
-X_test = np.array([np.pad(feature, ((0, max_length - len(feature)), (0, 0)), 'constant') for feature in X_test])
+X_train = pad_features(X_train, max_length)
+X_val = pad_features(X_val, max_length)
+X_test = pad_features(X_test, max_length)
 
 #
 # 3. Format data for training
@@ -515,71 +538,87 @@ print(f"Input shape: {input_shape}, Number of classes: {num_classes}")
 
 input_dimension = X_train_cnn.shape[1]
 
-model = Sequential()
-model.add(Flatten(input_shape=(119, 13, 1)))  # Adjust the input_shape to match your data
-model.add(Dense(64, activation='relu', kernel_regularizer=l2(0.01)))
-model.add(Dropout(0.5))
-model.add(Dense(32, activation='relu', kernel_regularizer=l2(0.01)))
-model.add(Dropout(0.5))
-model.add(Dense(num_classes, activation='softmax'))
-
-# Compile the model
-model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-print("model compiled. Here is the summary:")
-model.summary()
-print("end model summary")
-
 #
 # 5. Train the model
 #
 
 # Define early stopping callback
-early_stopping = EarlyStopping(monitor='val_loss', patience=5)
+early_stopping = EarlyStopping(monitor='val_loss', patience=4)
 
-# Fit the model with early stopping
-history = model.fit(X_train_cnn, y_train_cat, batch_size=32, epochs=30, validation_data=(X_val_cnn, y_val_cat),
-                    callbacks=[early_stopping])
-plot_training_history(history)
+# Define the KFold cross-validator
+n_splits = 5  # Define the number of folds
+kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+
+# Prepare to collect the scores
+fold_no = 1
+loss_per_fold = []
+acc_per_fold = []
+best_score = -np.inf
+best_model = None
+best_fold = None
+
+for train, val in kf.split(X_train_cnn, y_train_cat):
+    # Define the model architecture (re-initialize for each fold)
+    model = Sequential()
+    model.add(Flatten(input_shape=input_shape))
+    model.add(Dense(64, activation='relu'))  # Reduced from 64 to 32 neurons
+    model.add(Dropout(0.5))
+    # Removed one Dense layer here
+    model.add(Dense(num_classes, activation='softmax'))
+
+    # Compile the model
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+    # Generate a print
+    print(f'Training for fold {fold_no} ...')
+
+    # Fit the model
+    history = model.fit(X_train_cnn[train], y_train_cat[train],
+                        batch_size=32,
+                        epochs=30,
+                        verbose=0,
+                        validation_data=(X_train_cnn[val], y_train_cat[val]),
+                        callbacks=[early_stopping])
+
+    # Evaluate the model on the validation set
+    val_loss, val_accuracy = model.evaluate(X_train_cnn[val], y_train_cat[val], verbose=0)
+    print(f'Fold {fold_no} - Loss: {val_loss} - Accuracy: {val_accuracy * 100}%')
+    # Append scores
+    loss_per_fold.append(val_loss)
+    acc_per_fold.append(val_accuracy)
+
+    # Check if the current fold's model is the best so far
+    if val_accuracy > best_score:
+        best_score = val_accuracy
+        best_fold = fold_no
+        # Save the best model
+        best_model = model
+        # Optionally, you can save the best model to a file immediately
+        best_model.save('best_model.keras')
+
+    fold_no += 1
+
+# == Provide average scores ==
+print('------------------------------------------------------------------------')
+print('Score per fold')
+for i in range(0, len(acc_per_fold)):
+    print('------------------------------------------------------------------------')
+    print(f'> Fold {i + 1} - Loss: {loss_per_fold[i]} - Accuracy: {acc_per_fold[i]}%')
+print('------------------------------------------------------------------------')
+print('Average scores for all folds:')
+print(f'> Accuracy: {np.mean(acc_per_fold)} (+- {np.std(acc_per_fold)})')
+print(f'> Loss: {np.mean(loss_per_fold)}')
+print('------------------------------------------------------------------------')
+
+# After all folds are complete, you can convert the best model to TensorFlow Lite
+if best_model:
+    converter = tf.lite.TFLiteConverter.from_keras_model(best_model)
+    tflite_best_model = converter.convert()
+
+    # Save the best model's TFLite version
+    with open(MODEL_NAME, "wb") as f:
+        f.write(tflite_best_model)
+
+    print(f"The best model was from fold {best_fold} with an accuracy of {best_score * 100}%")
 #
-# 6. Evaluate the model
-#
-test_loss, test_accuracy = model.evaluate(X_test_cnn, y_test_cat)
-print(f"Test accuracy: {test_accuracy:.4f}, Test loss: {test_loss:.4f}")
-
-# Assuming `model` is your Keras model
-converter = tf.lite.TFLiteConverter.from_keras_model(model)
-
-# Enable full integer quantization
-converter.optimizations = [tf.lite.Optimize.DEFAULT]
-
-# Set the representative dataset for calibration
-converter.representative_dataset = representative_dataset_gen
-
-for data in representative_dataset_gen():
-    print(data[0].shape)  # Should match the model's input shape
-    break  # Just to check the first batch
-
-# Ensure that if any ops can't be quantized, the converter throws an error
-converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-
-# Specify the input and output types to be int8
-converter.inference_input_type = tf.int8
-converter.inference_output_type = tf.int8
-
-# Convert the model to a TensorFlow Lite model
-tflite_quant_model = converter.convert()
-
-# Save the quantized model
-with open(MODEL_NAME, "wb") as f:
-    f.write(tflite_quant_model)
-
 generate_header_file(LABEL_MAP, AUDIO_CONSTANTS)
-
-#
-# # Load the TFLite model
-# interpreter = tf.lite.Interpreter(model_path=MODEL_NAME)
-# interpreter.allocate_tensors()
-#
-# # Get input tensor details
-# input_details = interpreter.get_input_details()
-# print(f"Input details for C:\n{input_details}")

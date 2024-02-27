@@ -11,8 +11,8 @@ output_details = interpreter.get_output_details()
 
 # Test the model on random input data or actual test data
 input_shape = input_details[0]['shape']
-# Generate random INT8 data instead of UINT8
-input_data = np.random.randint(-128, 127, size=input_shape, dtype=np.int8)
+# Generate random FLOAT32 data in the range -1 to 1
+input_data = np.random.uniform(-1.0, 1.0, size=input_shape).astype(np.float32)
 interpreter.set_tensor(input_details[0]['index'], input_data)
 
 interpreter.invoke()
