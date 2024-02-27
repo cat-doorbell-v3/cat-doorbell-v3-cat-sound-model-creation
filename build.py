@@ -556,14 +556,10 @@ def main():
     features_normalized = normalize_features(features)
 
     # Split the dataset into training and a temporary set with stratification
-    x_train, x_temp, y_train, y_temp = train_test_split(features_normalized, labels, test_size=0.3, stratify=labels,
+    x_train, _, y_train, _ = train_test_split(features_normalized, labels, test_size=0.3, stratify=labels,
                                                         random_state=42)
 
-    # Now split the temporary set into validation and test sets, also with stratification
-    x_val, x_test, y_val, y_test = train_test_split(x_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42)
-
     # Determine the maximum length of the MFCC features in your dataset for padding
-    # Assuming features_normalized is a list of all feature arrays
     max_length = max(len(feature) for feature in features_normalized)
     print(f"Maximum length of MFCC features: {max_length}")
 
