@@ -254,6 +254,7 @@ def dynamic_range_compression(data, compression_factor=0.5):
     # Apply compression
     return np.sign(data) * np.log1p(compression_factor * np.abs(data))
 
+
 def augment_and_save(file_path, sampling_rate):
     data, _ = librosa.load(file_path, sr=sampling_rate)
 
@@ -367,9 +368,8 @@ def pad_features(features, max_length):
     return np.array(padded_features)
 
 
-def representative_dataset_gen():
+def representative_dataset_gen(X_train_cnn):
     for input_value in X_train_cnn[:100]:  # Assuming you're using a subset of your training data
-        # Model has only one input so each data point has to be in a tuple
         yield [np.expand_dims(input_value, axis=0).astype(np.float32)]
 
 
@@ -499,24 +499,13 @@ def train_and_select_best_model(X_train, y_train, input_shape, num_classes, n_sp
         fold_no += 1
 
     # Optionally save the best model to a file
-    best_model.save('best_model.keras')
+    best_model.save('/tmp/best_model.keras')
 
     print(f'Best model selected from fold {fold_no} with accuracy: {best_score * 100:.2f}%')
     return best_model
 
 
-def convert_and_save_model_to_tflite(keras_model, representative_data_gen, model_name="converted_model.tflite"):
-    """
-    Converts a Keras model to a TensorFlow Lite model with full integer quantization and saves it to a file.
-
-    Parameters:
-    - keras_model: The TensorFlow Keras model to be converted.
-    - representative_data_gen: A generator function that provides input data for the model, used during the
-      quantization process to calibrate the model for integer-only inference.
-    - model_name: The name of the file where the TensorFlow Lite model will be saved.
-
-    This function doesn't return anything but saves the converted model to the specified file name.
-    """
+def convert_and_save_model_to_tflite(keras_model, X_train_cnn, model_name="converted_model.tflite"):
     # Convert the TensorFlow model to a TensorFlow Lite model with full integer quantization
     converter = tf.lite.TFLiteConverter.from_keras_model(keras_model)
 
@@ -524,7 +513,7 @@ def convert_and_save_model_to_tflite(keras_model, representative_data_gen, model
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
     # Provide a representative dataset for calibration
-    converter.representative_dataset = representative_data_gen
+    converter.representative_dataset = lambda: representative_dataset_gen(X_train_cnn)
 
     # Ensure the converter generates a model compatible with integer-only input and output
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
@@ -540,72 +529,77 @@ def convert_and_save_model_to_tflite(keras_model, representative_data_gen, model
     print(f"Model saved to {model_name}")
 
 
-remove_directories(['dataset', 'sounds'])
+def main():
+    remove_directories(['dataset'])
 
-unzip_file('dataset.zip', '/tmp')
+    unzip_file('dataset.zip', '/tmp')
 
-organize_meows('/tmp/dataset')
+    organize_meows('/tmp/dataset')
 
-min_duration, max_duration, avg_duration = get_audio_durations_and_average('/tmp/dataset')
+    min_duration, max_duration, avg_duration = get_audio_durations_and_average('/tmp/dataset')
 
-sampling_rates = walk_directory_for_wav_sampling_rates('/tmp/dataset')
+    sampling_rates = walk_directory_for_wav_sampling_rates('/tmp/dataset')
 
-bit_depths_found = walk_directory_for_wav_bit_depth('/tmp/dataset')
+    bit_depths_found = walk_directory_for_wav_bit_depth('/tmp/dataset')
 
-print(f"All files have a bit depth of {bit_depths_found} bits:")
+    print(f"All files have a bit depth of {bit_depths_found} bits:")
 
-augment_wav_files('/tmp/dataset', sampling_rates[0])
+    augment_wav_files('/tmp/dataset', sampling_rates[0])
 
-mfcc_data = process_directory_for_mfcc_features('/tmp/dataset')
+    mfcc_data = process_directory_for_mfcc_features('/tmp/dataset')
 
-print(f"There are {len(mfcc_data)} MFCC features.")
+    print(f"There are {len(mfcc_data)} MFCC features.")
 
-features, labels = extract_features_and_labels(mfcc_data, LABEL_MAP)
+    features, labels = extract_features_and_labels(mfcc_data, LABEL_MAP)
 
-# Normalize the features before splitting and padding
-features_normalized = normalize_features(features)
+    # Normalize the features before splitting and padding
+    features_normalized = normalize_features(features)
 
-# Split the dataset into training and a temporary set with stratification
-X_train, X_temp, y_train, y_temp = train_test_split(features_normalized, labels, test_size=0.3, stratify=labels,
-                                                    random_state=42)
+    # Split the dataset into training and a temporary set with stratification
+    X_train, X_temp, y_train, y_temp = train_test_split(features_normalized, labels, test_size=0.3, stratify=labels,
+                                                        random_state=42)
 
-# Now split the temporary set into validation and test sets, also with stratification
-X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42)
+    # Now split the temporary set into validation and test sets, also with stratification
+    X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42)
 
-# Determine the maximum length of the MFCC features in your dataset for padding
-# Assuming features_normalized is a list of all feature arrays
-max_length = max(len(feature) for feature in features_normalized)
-print(f"Maximum length of MFCC features: {max_length}")
+    # Determine the maximum length of the MFCC features in your dataset for padding
+    # Assuming features_normalized is a list of all feature arrays
+    max_length = max(len(feature) for feature in features_normalized)
+    print(f"Maximum length of MFCC features: {max_length}")
 
-# Apply padding
-X_train = pad_features(X_train, max_length)
-X_val = pad_features(X_val, max_length)
-X_test = pad_features(X_test, max_length)
+    # Apply padding
+    X_train = pad_features(X_train, max_length)
+    X_val = pad_features(X_val, max_length)
+    X_test = pad_features(X_test, max_length)
 
-# Convert labels to categorical (one-hot encoding)
-y_train_cat = to_categorical(y_train)
-y_val_cat = to_categorical(y_val)
-y_test_cat = to_categorical(y_test)
+    # Convert labels to categorical (one-hot encoding)
+    y_train_cat = to_categorical(y_train)
+    y_val_cat = to_categorical(y_val)
+    y_test_cat = to_categorical(y_test)
 
-# Assuming X_train has already been reshaped to fit the CNN input requirements
-# For CNNs, TensorFlow expects the data to be in the format of (samples, rows, cols, channels)
-# Since MFCC features have only one channel, we need to expand the dimensions of our data
-X_train_cnn = np.expand_dims(X_train, -1)
-X_val_cnn = np.expand_dims(X_val, -1)
-X_test_cnn = np.expand_dims(X_test, -1)
+    # Assuming X_train has already been reshaped to fit the CNN input requirements
+    # For CNNs, TensorFlow expects the data to be in the format of (samples, rows, cols, channels)
+    # Since MFCC features have only one channel, we need to expand the dimensions of our data
+    X_train_cnn = np.expand_dims(X_train, -1)
+    X_val_cnn = np.expand_dims(X_val, -1)
+    X_test_cnn = np.expand_dims(X_test, -1)
 
-input_shape = (X_train_cnn.shape[1], X_train_cnn.shape[2], 1)  # (MFCC features, time steps, 1)
-num_classes = y_train_cat.shape[1]
+    input_shape = (X_train_cnn.shape[1], X_train_cnn.shape[2], 1)  # (MFCC features, time steps, 1)
+    num_classes = y_train_cat.shape[1]
 
-print(f"Input shape: {input_shape}, Number of classes: {num_classes}")
+    print(f"Input shape: {input_shape}, Number of classes: {num_classes}")
 
-input_dimension = X_train_cnn.shape[1]
-print(f"Input dimension: {input_dimension}")
+    input_dimension = X_train_cnn.shape[1]
+    print(f"Input dimension: {input_dimension}")
 
-best_model = train_and_select_best_model(X_train_cnn, y_train_cat, input_shape, num_classes)
+    best_model = train_and_select_best_model(X_train_cnn, y_train_cat, input_shape, num_classes)
 
-convert_and_save_model_to_tflite(best_model, representative_dataset_gen, "cat_sound_model.tflite")
+    convert_and_save_model_to_tflite(best_model, X_train_cnn, "cat_sound_model.tflite")
 
-audio_constants = generate_cpp_definitions(FEATURE_SIZE, AUDIO_SAMPLING_FREQUENCY, avg_duration,
-                                           FFT_WINDOW_SIZE, HOP_LENGTH)
-generate_header_file(LABEL_MAP, audio_constants)
+    audio_constants = generate_cpp_definitions(FEATURE_SIZE, AUDIO_SAMPLING_FREQUENCY, avg_duration,
+                                               FFT_WINDOW_SIZE, HOP_LENGTH)
+    generate_header_file(LABEL_MAP, audio_constants)
+
+
+if __name__ == '__main__':
+    main()
