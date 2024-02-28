@@ -87,7 +87,7 @@ def record_audio(duration, samplerate=8000):
     print(f"Recording for {duration} seconds...")
     recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='float32')
     sd.wait()  # Wait until the recording is finished
-    print("Recording finished")
+    # print("Recording finished")
     return recording.flatten()
 
 
@@ -125,7 +125,7 @@ def is_cat_sound(prediction):
     threshold = 0.8  # This is arbitrary; adjust based on your model's performance and requirements
 
     if cat_sound_prob > threshold:
-        return "yes"
+        return "yes 👍"
     else:
         return "no"
 
