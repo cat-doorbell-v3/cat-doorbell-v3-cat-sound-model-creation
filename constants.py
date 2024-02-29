@@ -1,0 +1,11 @@
+MODEL_OUTPUT_FILE_NAME = "cat_doorbell_model.tflite"
+MODEL_DATASET = "cat-doorbell-model-dataset"
+MODEL_DATASET_ZIP = f"{MODEL_DATASET}.zip"
+MODEL_DATASET_PATH = f"/tmp/{MODEL_DATASET}"
+MODEL_DATASET_CATEGORIES = ["cat", "noise"]
+N_MELS = 40
+N_FFT = 2048
+HOP_LENGTH = 512
+AUDIO_DURATION = 1  # seconds
+SAMPLING_RATE = 22050
+MAX_PAD_LENGTH = 44
