@@ -34,7 +34,7 @@ def play_audio(filename='output.wav'):
 
 if __name__ == '__main__':
     duration = 5  # seconds
-    samplerate = 8000  # Hz
+    samplerate = 22050  # Hz
     filename = 'test_recording.wav'
 
     record_audio(duration, samplerate, filename)
