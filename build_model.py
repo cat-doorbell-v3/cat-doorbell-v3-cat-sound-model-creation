@@ -3,16 +3,50 @@ import shutil
 import zipfile
 
 import librosa
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.layers import Conv2D, MaxPooling2D
 from tensorflow.keras.layers import Dense, Flatten, Dropout
+from tensorflow.keras.losses import SparseCategoricalCrossentropy
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import SGD
 
 import constants
 
+
+def add_random_noise(data, noise_level=0.005):
+    """
+    Adds random noise to the data.
+
+    Args:
+        data (numpy.ndarray): The input data (spectrogram).
+        noise_level (float): The amplitude of the noise to add (relative to data's range).
+
+    Returns:
+        numpy.ndarray: The data with added random noise.
+    """
+    noise = np.random.randn(*data.shape) * noise_level
+    augmented_data = data + noise
+    return np.clip(augmented_data, -np.inf, np.inf)  # Ensure values stay within a valid range
+
+
+def augment_data(X, y):
+    """
+    Augments the dataset by applying random transformations.
+
+    Args:
+        X (numpy.ndarray): The input features (spectrograms).
+        y (numpy.ndarray): The target labels.
+
+    Returns:
+        numpy.ndarray: The augmented input features.
+        numpy.ndarray: The (unmodified) target labels.
+    """
+    X_augmented = np.array([add_random_noise(x) for x in X])
+    return X_augmented, y
 
 def unzip_file(zip_file_path, extract_to_path):
     """
@@ -121,24 +155,42 @@ def convert_to_tflite(model, X_train, filename):
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
-    # This is a simple way to implement representative dataset
     def representative_dataset_gen():
         for i in range(100):
-            # Get sample input data as a numpy array in a method of your choosing.
-            yield [X_train[i].reshape(1, *X_train[i].shape)]
+            # Ensure the sample input data is cast to FLOAT32
+            yield [X_train[i].reshape(1, *X_train[i].shape).astype(np.float32)]
 
     converter.representative_dataset = representative_dataset_gen
-
-    # Ensure that if any ops can't be quantized, the converter throws an error
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-    # Set the input and output tensors to int8 (for full integer quantization)
     converter.inference_input_type = tf.int8
     converter.inference_output_type = tf.int8
 
     tflite_model_quant = converter.convert()
-
-    # Save the model to disk
     open(filename, "wb").write(tflite_model_quant)
+
+
+def plot_model_fit(history_data):
+    # Plotting training & validation accuracy values
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.plot(history_data['accuracy'])
+    plt.plot(history_data['val_accuracy'])
+    plt.title('Model Accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+
+    # Plotting training & validation loss values
+    plt.subplot(1, 2, 2)
+    plt.plot(history_data['loss'])
+    plt.plot(history_data['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+
+    plt.tight_layout()
+    plt.show()
 
 
 def main():
@@ -156,8 +208,8 @@ def main():
     # Ensure each spectrogram has the same second dimension
     X = X.reshape(*X.shape, 1)  # Add channel dimension for CNN input
 
-    # Split the dataset into training and validation sets
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_augmented, y_augmented = augment_data(X, y)
+    X_train, X_val, y_train, y_val = train_test_split(X_augmented, y_augmented, test_size=0.2, random_state=42)
 
     print(f"Training samples: {X_train.shape[0]}, Validation samples: {X_val.shape[0]}")
 
@@ -165,14 +217,38 @@ def main():
     num_classes = 2  # Update if you have more classes
     input_shape = X_train.shape[1:]  # Should be (spectrogram_height, spectrogram_width, 1)
 
+
     model = build_model(input_shape, num_classes)
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+    # Example of using a different optimizer and loss function
+    model.compile(
+        optimizer=SGD(lr=0.01, momentum=0.9),  # Using Stochastic Gradient Descent
+        loss=SparseCategoricalCrossentropy(from_logits=True),  # If your model outputs logits
+        metrics=['accuracy']
+    )
 
     # Model summary
     model.summary()
 
+    # Define early stopping callback
+    early_stopping = EarlyStopping(
+        monitor='val_loss',  # Monitor the validation set loss
+        patience=3,  # Number of epochs with no improvement after which training will be stopped
+        restore_best_weights=True  # Restores model weights from the epoch with the best value of the monitored quantity
+    )
+
+    # Include early stopping in the fit function
+    history = model.fit(
+        X_train, y_train,
+        epochs=30,
+        batch_size=32,
+        validation_data=(X_val, y_val),
+        shuffle=True,
+        callbacks=[early_stopping]
+    )
+
     # Train the model
-    history = model.fit(X_train, y_train, epochs=30, batch_size=32, validation_data=(X_val, y_val))
+    plot_model_fit(history.history)
 
     convert_to_tflite(model, X_train, constants.MODEL_OUTPUT_FILE_NAME)
 
