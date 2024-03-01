@@ -6,13 +6,13 @@ import librosa
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+from keras.regularizers import l2
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.layers import Conv2D, MaxPooling2D
 from tensorflow.keras.layers import Dense, Flatten, Dropout
-from tensorflow.keras.losses import SparseCategoricalCrossentropy
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.utils import to_categorical
 
 import constants
 
@@ -136,20 +136,6 @@ def load_dataset(dataset_path, categories, max_pad_len):
     return np.array(X), np.array(y)
 
 
-def build_model(input_shape, num_classes):
-    model = Sequential([
-        Conv2D(8, kernel_size=(3, 3), activation='relu', input_shape=input_shape),
-        MaxPooling2D(pool_size=(2, 2)),
-        Dropout(0.25),
-        Flatten(),
-        Dense(16, activation='relu'),
-        Dropout(0.5),
-        Dense(num_classes, activation='softmax')
-    ])
-
-    return model
-
-
 # Convert the model to the TensorFlow Lite format with quantization
 def convert_to_tflite(model, X_train, filename):
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
@@ -209,23 +195,32 @@ def main():
     X = X.reshape(*X.shape, 1)  # Add channel dimension for CNN input
 
     X_augmented, y_augmented = augment_data(X, y)
+    # Split the dataset into training and validation sets
     X_train, X_val, y_train, y_val = train_test_split(X_augmented, y_augmented, test_size=0.2, random_state=42)
 
-    print(f"Training samples: {X_train.shape[0]}, Validation samples: {X_val.shape[0]}")
+    num_classes = len(constants.MODEL_DATASET_CATEGORIES)
+
+    # Convert labels to one-hot encoding
+    y_train = to_categorical(y_train, num_classes)
+    y_val = to_categorical(y_val, num_classes)
 
     # Assuming binary classification (cat vs noise) and using 'binary_crossentropy' loss
     num_classes = 2  # Update if you have more classes
     input_shape = X_train.shape[1:]  # Should be (spectrogram_height, spectrogram_width, 1)
 
+    model = Sequential([
+        Conv2D(8, kernel_size=(3, 3), activation='relu', input_shape=input_shape, kernel_regularizer=l2(0.001)),
+        MaxPooling2D(pool_size=(2, 2)),
+        Dropout(0.3),  # Increased dropout rate
+        Flatten(),
+        Dense(10, activation='relu', kernel_regularizer=l2(0.001)),  # Reduced complexity and added regularizer
+        Dropout(0.6),  # Increased dropout rate
+        Dense(num_classes, activation='softmax')
+    ])
 
-    model = build_model(input_shape, num_classes)
-
-    # Example of using a different optimizer and loss function
-    model.compile(
-        optimizer=SGD(lr=0.01, momentum=0.9),  # Using Stochastic Gradient Descent
-        loss=SparseCategoricalCrossentropy(from_logits=True),  # If your model outputs logits
-        metrics=['accuracy']
-    )
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
 
     # Model summary
     model.summary()
