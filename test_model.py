@@ -1,6 +1,9 @@
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 import tensorflow as tf
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix
 
 import constants
 import utils
@@ -89,6 +92,11 @@ def main():
     # Calculate the accuracy
     test_accuracy = accuracy_score(y, predicted_labels)
     print(f"Test accuracy: {test_accuracy}")
+    cm = confusion_matrix(y, predicted_labels)
+    sns.heatmap(cm, annot=True, fmt='d')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.show()
 
 
 if __name__ == "__main__":
