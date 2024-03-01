@@ -72,7 +72,7 @@ def print_model_input_details(interpreter):
         print(detail)
 
 
-def interpret_prediction(prediction):
+def old_interpret_prediction(prediction):
     # Assuming the "cat sound" class is at index 1
     cat_sound_prob = prediction[0][1]  # Adjust based on your model's output
     threshold = 0.5  # Threshold can be adjusted based on your requirements
@@ -81,6 +81,32 @@ def interpret_prediction(prediction):
         return "👍"  # Thumbs up emoji
     else:
         return "no"
+
+
+def dequantize_output(output_data, output_details):
+    # Extract scale and zero-point from output details
+    scale = output_details[0]['quantization_parameters']['scales']
+    zero_point = output_details[0]['quantization_parameters']['zero_points']
+
+    # Dequantize the output data
+    dequantized_output = scale * (output_data.astype(np.float32) - zero_point)
+    return dequantized_output
+
+
+def interpret_prediction(output_data, output_details):
+    # Dequantize model output
+    dequantized_output = dequantize_output(output_data, output_details)
+
+    # Apply softmax to convert logits to probabilities (if necessary)
+    probabilities = tf.nn.softmax(dequantized_output).numpy()
+
+    # Assuming binary classification with 'cat sound' as the second class
+    cat_sound_prob = probabilities[0][1]
+    print("Dequantized probability of cat sound:", cat_sound_prob)
+
+    return "👍" if cat_sound_prob > 0.25 else "no"
+
+
 
 
 def main():
@@ -96,11 +122,10 @@ def main():
             audio_features_quantized = quantize_input(audio_features, interpreter.get_input_details())
             print("Input shape to the model:", audio_features_quantized.shape)  # Verify shape after quantization
 
-            prediction = run_inference(audio_features_quantized, interpreter)
-            print(f"Prediction result: {prediction}")
-
-            # Interpret the prediction
-            cat_sound_detected = interpret_prediction(prediction)
+            # Inside your main function or wherever you handle model inference
+            output_data = run_inference(audio_features_quantized, interpreter)
+            output_details = interpreter.get_output_details()
+            cat_sound_detected = interpret_prediction(output_data, output_details)
             print(f"Cat sound detected? {cat_sound_detected}")
 
             time.sleep(2)  # Pause for 2 seconds before next recording
