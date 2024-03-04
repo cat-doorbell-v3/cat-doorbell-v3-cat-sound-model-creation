@@ -1,16 +1,17 @@
 MODEL_OUTPUT_FILE_NAME = "cat_doorbell_model.tflite"
-MODEL_DATASET = "cat-doorbell-model-dataset"
+MODEL_DATASET = "cat-doorbell-model-input"
 MODEL_DATASET_ZIP = f"{MODEL_DATASET}.zip"
 MODEL_DATASET_PATH = f"/tmp/{MODEL_DATASET}"
-MODEL_DATASET_CATEGORIES = ["cat", "dog", "noise"]
+MODEL_DATASET_CATEGORIES = ["cat", "not_cat"]
+#
 N_MELS = 40
-N_FFT = 2048
-HOP_LENGTH = 512
+N_FFT = 512
+HOP_LENGTH = 320
 AUDIO_DURATION = 1  # seconds
-SAMPLING_RATE = 22050
-MAX_PAD_LENGTH = 44
+SAMPLING_RATE = 16000
+MAX_PAD_LENGTH = 50
 
-TEST_DATASET = "cat-doorbell-test-dataset"
-TEST_DATASET_ZIP = f"{TEST_DATASET}.zip"
-TEST_DATASET_PATH = f"/tmp/{TEST_DATASET}"
-TEST_DATASET_CATEGORIES = ["cat", "dog"]
+# TEST_DATASET = "cat-doorbell-test-dataset"
+# TEST_DATASET_ZIP = f"{TEST_DATASET}.zip"
+# TEST_DATASET_PATH = f"/tmp/{TEST_DATASET}"
+# TEST_DATASET_CATEGORIES = ["cat", "dog"]

@@ -1,9 +1,12 @@
+import numpy as np
 from keras.regularizers import l2
+from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.layers import Conv2D, MaxPooling2D
 from tensorflow.keras.layers import Dense, Flatten, Dropout
 from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import save_model
 from tensorflow.keras.utils import to_categorical
 
 import constants
@@ -31,50 +34,86 @@ def main():
 
     num_classes = len(constants.MODEL_DATASET_CATEGORIES)
 
-    # Convert labels to one-hot encoding
-    y_train = to_categorical(y_train, num_classes)
-    y_val = to_categorical(y_val, num_classes)
-
     input_shape = X_train.shape[1:]  # Should be (spectrogram_height, spectrogram_width, 1)
 
-    model = Sequential([
-        Conv2D(8, kernel_size=(3, 3), activation='relu', input_shape=input_shape, kernel_regularizer=l2(0.001)),
-        MaxPooling2D(pool_size=(2, 2)),
-        Dropout(0.3),  # Increased dropout rate
-        Flatten(),
-        Dense(10, activation='relu', kernel_regularizer=l2(0.001)),  # Reduced complexity and added regularizer
-        Dropout(0.6),  # Increased dropout rate
-        Dense(num_classes, activation='softmax')
-    ])
+    kfold = KFold(n_splits=5, shuffle=True, random_state=42)
 
-    model.compile(optimizer='adam',
-                  loss='categorical_crossentropy',
-                  metrics=['accuracy'])
+    best_model = None
+    best_model_history = None
+    best_accuracy = 0
+    fold_no = 1
+    fold_metrics = []
+    for train, val in kfold.split(X_augmented, y_augmented):
+        # Split the dataset into the current train and validation sets
+        X_train, X_val = X_augmented[train], X_augmented[val]
+        y_train, y_val = y_augmented[train], y_augmented[val]
 
-    # Model summary
-    model.summary()
+        # Convert labels to one-hot encoding
+        y_train = to_categorical(y_train, num_classes)
+        y_val = to_categorical(y_val, num_classes)
 
-    # Define early stopping callback
-    early_stopping = EarlyStopping(
-        monitor='val_loss',  # Monitor the validation set loss
-        patience=3,  # Number of epochs with no improvement after which training will be stopped
-        restore_best_weights=True  # Restores model weights from the epoch with the best value of the monitored quantity
-    )
+        model = Sequential([
+            Conv2D(8, kernel_size=(3, 3), activation='relu', input_shape=input_shape, kernel_regularizer=l2(0.001)),
+            MaxPooling2D(pool_size=(2, 2)),
+            Dropout(0.2),  # Increased dropout rate
+            Flatten(),
+            Dense(10, activation='relu', kernel_regularizer=l2(0.001)),  # Reduced complexity and added regularizer
+            Dropout(0.5),  # Increased dropout rate
+            Dense(num_classes, activation='softmax')
+        ])
 
-    # Include early stopping in the fit function
-    history = model.fit(
-        X_train, y_train,
-        epochs=30,
-        batch_size=32,
-        validation_data=(X_val, y_val),
-        shuffle=True,
-        callbacks=[early_stopping]
-    )
+        model.compile(optimizer='adam',
+                      loss='categorical_crossentropy',
+                      metrics=['accuracy'])
 
-    # Train the model
-    utils.plot_model_fit(history.history)
+        # Model summary
+        model.summary()
 
-    utils.convert_to_tflite(model, X_train, constants.MODEL_OUTPUT_FILE_NAME)
+        # Define early stopping callback
+        early_stopping = EarlyStopping(
+            monitor='val_loss',  # Monitor the validation set loss
+            patience=2,  # Number of epochs with no improvement after which training will be stopped
+            restore_best_weights=True
+            # Restores model weights from the epoch with the best value of the monitored quantity
+        )
+
+        # Include early stopping in the fit function
+        history = model.fit(
+            X_train, y_train,
+            epochs=30,
+            batch_size=32,
+            validation_data=(X_val, y_val),
+            shuffle=True,
+            callbacks=[early_stopping]
+        )
+
+        # Collect the metrics from the history object
+        fold_metrics.append({
+            'fold': fold_no,
+            'accuracy': history.history['accuracy'],
+            'val_accuracy': history.history['val_accuracy'],
+            'loss': history.history['loss'],
+            'val_loss': history.history['val_loss']
+        })
+
+        # Check if this is the best model so far
+        mean_val_accuracy = np.mean(history.history['val_accuracy'])
+        if mean_val_accuracy > best_accuracy:
+            best_accuracy = mean_val_accuracy
+            best_model = model
+            best_model_history = history.history  # Store the current best model's history
+            # Saving the best model's weights
+            model_save_path = '/tmp/best_model.h5'
+            save_model(model, model_save_path)
+
+        fold_no += 1
+
+    # After all folds are completed, we have the best model based on validation accuracy
+    print(f"Best model achieved an average validation accuracy of: {best_accuracy}")
+
+    utils.plot_model_fit(best_model_history)
+
+    utils.convert_to_tflite(best_model, X_train, constants.MODEL_OUTPUT_FILE_NAME)
 
 
 if __name__ == '__main__':
