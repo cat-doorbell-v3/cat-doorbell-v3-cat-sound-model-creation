@@ -1,5 +1,6 @@
 import numpy as np
 from keras.regularizers import l2
+from sklearn.metrics import precision_score, recall_score, f1_score
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.callbacks import EarlyStopping
@@ -113,7 +114,23 @@ def main():
 
     utils.plot_model_fit(best_model_history)
 
+    # Generate predictions for the validation set
+    y_val_pred = best_model.predict(X_val)
+    # Convert predictions from one hot to class integers
+    y_val_pred_classes = np.argmax(y_val_pred, axis=1)
+    # Convert true validation labels from one hot to class integers
+    y_val_true_classes = np.argmax(y_val, axis=1)
+
+    # Calculate precision, recall, and F1 score
+    precision = precision_score(y_val_true_classes, y_val_pred_classes, average='macro')
+    recall = recall_score(y_val_true_classes, y_val_pred_classes, average='macro')
+    f1 = f1_score(y_val_true_classes, y_val_pred_classes, average='macro')
+
     utils.convert_to_tflite(best_model, X_train, constants.MODEL_FILE_NAME)
+
+    print(f'Best Model - Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}')
+
+
 
 
 if __name__ == '__main__':
