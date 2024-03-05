@@ -49,17 +49,17 @@ def main():
     utils.unzip_file(constants.TEST_DATASET_ZIP, '/tmp')
 
     # Find the maximum spectrogram length
-    max_pad_len = utils.find_max_spectrogram_length(constants.TEST_DATASET_PATH, constants.TEST_DATASET_CATEGORIES)
+    max_pad_len = utils.find_max_spectrogram_length(constants.TEST_DATASET_PATH, constants.DATASET_CATEGORIES)
     print(f"Maximum pad length: {max_pad_len}")
 
     # Load and pad/truncate dataset
-    X, y = utils.load_dataset(constants.TEST_DATASET_PATH, constants.TEST_DATASET_CATEGORIES, max_pad_len)
+    X, y = utils.load_dataset(constants.TEST_DATASET_PATH, constants.DATASET_CATEGORIES, max_pad_len)
 
     # Ensure X is reshaped correctly as per the model's input requirements
     X = X.reshape(*X.shape, 1)  # Add the channel dimension if necessary
 
     # Load the TFLite model
-    interpreter, input_details, output_details = load_tflite_model(constants.MODEL_OUTPUT_FILE_NAME)
+    interpreter, input_details, output_details = load_tflite_model(constants.MODEL_FILE_NAME)
 
     # Make predictions on the test data
     predictions = predict_with_tflite_model(interpreter, input_details, output_details, X)

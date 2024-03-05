@@ -1,6 +1,7 @@
 import numpy as np
 from keras.regularizers import l2
 from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.callbacks import EarlyStopping
@@ -128,7 +129,13 @@ def main():
 
     utils.convert_to_tflite(best_model, X_train, constants.MODEL_FILE_NAME)
 
-    print(f'Best Model - Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}')
+    pos_class_probabilities = y_val_pred[:, 1]
+
+    # Now we calculate the AUC-ROC using the true class labels and the predicted probabilities
+    roc_auc = roc_auc_score(y_val_true_classes, pos_class_probabilities)
+
+    # Now you can also include the ROC-AUC in the print statement at the end.
+    print(f'Best Model - Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, AUC-ROC: {roc_auc:.4f}')
 
 
 

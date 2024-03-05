@@ -7,9 +7,12 @@ This changes .wav files to conform to:
 - single channel (mono)
 
 """
+import glob
+import os
 import random
 import shutil
 import sys
+import wave
 
 import librosa
 import numpy as np
@@ -129,10 +132,6 @@ def augment_process_directory(directory):
                 augment_audio(file_path, root)
 
 
-import os
-import glob
-
-
 def count_wav_files_in_subdirs(parent_dir):
     # Check if the specified path is indeed a directory
     if not os.path.isdir(parent_dir):
@@ -153,6 +152,60 @@ def count_wav_files_in_subdirs(parent_dir):
             print(f"Subdirectory: '{subdir}', .wav files: {num_wav_files}")
 
 
+def find_wav_files(directory):
+    """Recursively finds all .wav files in the given directory and its subdirectories."""
+    wav_files = []
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.endswith(".wav"):
+                wav_files.append(os.path.join(root, file))
+    return wav_files
+
+
+def get_wav_duration(wav_file):
+    """Returns the duration of a .wav file in seconds."""
+    with wave.open(wav_file, 'rb') as wf:
+        frames = wf.getnframes()
+        rate = wf.getframerate()
+        duration = frames / float(rate)
+        return duration
+
+
+def analyze_wav_files(directory):
+    """Finds all .wav files in the directory, then reports the min, max, and average duration."""
+    wav_files = find_wav_files(directory)
+    if not wav_files:
+        print("No .wav files found in the directory.")
+        return
+
+    durations = [get_wav_duration(file) for file in wav_files]
+    min_duration = min(durations)
+    max_duration = max(durations)
+    avg_duration = sum(durations) / len(durations)
+
+    print(f"Total .wav files found: {len(wav_files)}")
+    print(f"Minimum duration: {min_duration} seconds")
+    print(f"Maximum duration: {max_duration} seconds")
+    print(f"Average duration: {avg_duration} seconds")
+
+
+def create_model_zip(directory):
+    """
+    Creates a zip archive of the specified directory.
+
+    Args:
+    - directory (str): The path to the directory to be zipped.
+
+    Returns:
+    - None: Prints the path of the created zip file.
+    """
+    parent_dir = os.path.abspath(os.path.join(directory, os.pardir))
+    base_dir = os.path.basename(os.path.normpath(directory))
+    zip_file_path = os.path.join(parent_dir, base_dir)
+    shutil.make_archive(zip_file_path, 'zip', parent_dir, base_dir)
+    print(f"Created zip file: {zip_file_path}.zip")
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: script_name.py <directory>")
@@ -162,6 +215,9 @@ if __name__ == "__main__":
 
     print("First, count the number of files in the directory")
     count_wav_files_in_subdirs(directory)
+
+    print(f"Analyzing directory {directory}")
+    analyze_wav_files(directory)
 
     print(f"Conforming directory {directory}")
     conform_process_directory(directory)
@@ -175,10 +231,10 @@ if __name__ == "__main__":
     print("Re-count the files")
     count_wav_files_in_subdirs(directory)
 
-    parent_dir = os.path.abspath(os.path.join(directory, os.pardir))
-    base_dir = os.path.basename(os.path.normpath(directory))
-    zip_file_path = os.path.join(parent_dir, base_dir)
-    shutil.make_archive(zip_file_path, 'zip', parent_dir, base_dir)
-    print(f"Created zip file: {zip_file_path}.zip")
+    print(f"Re-analyze directory {directory}")
+    analyze_wav_files(directory)
+
+    print(f"Save directory {directory} in a zip file")
+    create_model_zip(directory)
 
     print("Done")
