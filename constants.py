@@ -11,7 +11,7 @@ AUDIO_DURATION = 1  # seconds
 SAMPLING_RATE = 16000
 MAX_PAD_LENGTH = 50
 
-# TEST_DATASET = "cat-doorbell-test-dataset"
-# TEST_DATASET_ZIP = f"{TEST_DATASET}.zip"
-# TEST_DATASET_PATH = f"/tmp/{TEST_DATASET}"
-# TEST_DATASET_CATEGORIES = ["cat", "dog"]
+TEST_DATASET = "cat-doorbell-model-test"
+TEST_DATASET_ZIP = f"{TEST_DATASET}.zip"
+TEST_DATASET_PATH = f"/tmp/{TEST_DATASET}"
+TEST_DATASET_CATEGORIES = ["cat", "not_cat"]

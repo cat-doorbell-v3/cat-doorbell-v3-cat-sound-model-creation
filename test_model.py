@@ -9,8 +9,6 @@ import constants
 import utils
 
 
-# ...
-
 def load_tflite_model(tflite_model_path):
     # Load the TFLite model and allocate tensors.
     interpreter = tf.lite.Interpreter(model_path=tflite_model_path)
@@ -21,26 +19,6 @@ def load_tflite_model(tflite_model_path):
     output_details = interpreter.get_output_details()
 
     return interpreter, input_details, output_details
-
-
-def predict_with_tflite_model(interpreter, input_details, output_details, X_test):
-    # Ensure that the input data is float32
-    X_test = X_test.astype('float32')
-
-    # Initialize an array for storing predictions
-    predictions = []
-
-    # Iterate over each test sample and make predictions
-    for i in range(len(X_test)):
-        # Set the tensor to point to the input data to be inferred
-        interpreter.set_tensor(input_details[0]['index'], [X_test[i]])
-        # Run the inference
-        interpreter.invoke()
-        # Extract the output
-        output_data = interpreter.get_tensor(output_details[0]['index'])
-        predictions.append(output_data[0])
-
-    return np.array(predictions)
 
 
 def predict_with_tflite_model(interpreter, input_details, output_details, X_test):
