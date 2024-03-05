@@ -19,11 +19,11 @@ def main():
     utils.unzip_file(constants.MODEL_DATASET_ZIP, '/tmp')
 
     # Find the maximum spectrogram length
-    max_pad_len = utils.find_max_spectrogram_length(constants.MODEL_DATASET_PATH, constants.MODEL_DATASET_CATEGORIES)
+    max_pad_len = utils.find_max_spectrogram_length(constants.MODEL_DATASET_PATH, constants.DATASET_CATEGORIES)
     print(f"Maximum pad length: {max_pad_len}")
 
     # Load and pad/truncate dataset
-    X, y = utils.load_dataset(constants.MODEL_DATASET_PATH, constants.MODEL_DATASET_CATEGORIES, max_pad_len)
+    X, y = utils.load_dataset(constants.MODEL_DATASET_PATH, constants.DATASET_CATEGORIES, max_pad_len)
 
     # Ensure each spectrogram has the same second dimension
     X = X.reshape(*X.shape, 1)  # Add channel dimension for CNN input
@@ -32,7 +32,7 @@ def main():
     # Split the dataset into training and validation sets
     X_train, X_val, y_train, y_val = train_test_split(X_augmented, y_augmented, test_size=0.2, random_state=42)
 
-    num_classes = len(constants.MODEL_DATASET_CATEGORIES)
+    num_classes = len(constants.DATASET_CATEGORIES)
 
     input_shape = X_train.shape[1:]  # Should be (spectrogram_height, spectrogram_width, 1)
 
@@ -55,10 +55,10 @@ def main():
         model = Sequential([
             Conv2D(8, kernel_size=(3, 3), activation='relu', input_shape=input_shape, kernel_regularizer=l2(0.001)),
             MaxPooling2D(pool_size=(2, 2)),
-            Dropout(0.2),  # Increased dropout rate
+            Dropout(0.2),
             Flatten(),
-            Dense(10, activation='relu', kernel_regularizer=l2(0.001)),  # Reduced complexity and added regularizer
-            Dropout(0.5),  # Increased dropout rate
+            Dense(10, activation='relu', kernel_regularizer=l2(0.001)),
+            Dropout(0.5),
             Dense(num_classes, activation='softmax')
         ])
 
@@ -72,7 +72,7 @@ def main():
         # Define early stopping callback
         early_stopping = EarlyStopping(
             monitor='val_loss',  # Monitor the validation set loss
-            patience=2,  # Number of epochs with no improvement after which training will be stopped
+            patience=1,  # Number of epochs with no improvement after which training will be stopped
             restore_best_weights=True
             # Restores model weights from the epoch with the best value of the monitored quantity
         )
@@ -113,7 +113,7 @@ def main():
 
     utils.plot_model_fit(best_model_history)
 
-    utils.convert_to_tflite(best_model, X_train, constants.MODEL_OUTPUT_FILE_NAME)
+    utils.convert_to_tflite(best_model, X_train, constants.MODEL_FILE_NAME)
 
 
 if __name__ == '__main__':
