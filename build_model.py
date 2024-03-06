@@ -56,13 +56,20 @@ def main():
         y_val = to_categorical(y_val, num_classes)
 
         model = Sequential([
-            Conv2D(8, kernel_size=(3, 3), activation='relu', input_shape=input_shape, kernel_regularizer=l2(0.001)),
-            MaxPooling2D(pool_size=(2, 2)),
-            Dropout(0.2),
+            Conv2D(filters=constants.MODEL_CONV2D_FILTERS,
+                   kernel_size=constants.MODEL_CONV2D_KERNEL_SIZE,
+                   activation=constants.MODEL_CONV2D_ACTIVATION,
+                   input_shape=input_shape,
+                   kernel_regularizer=l2(constants.MODEL_CONV2D_KERNEL_REGULARIZER)),
+            MaxPooling2D(pool_size=constants.MODEL_MAX_POOL_SIZE),
+            Dropout(constants.MODEL_DROPOUT_RATE_ONE),
             Flatten(),
-            Dense(10, activation='relu', kernel_regularizer=l2(0.001)),
-            Dropout(0.5),
-            Dense(num_classes, activation='softmax')
+            Dense(units=constants.MODEL_DENSE_UNITS,
+                  activation=constants.MODEL_DENSE_ONE_ACTIVATION,
+                  kernel_regularizer=l2(constants.MODEL_DENSE_KERNEL_REGULARIZER)),
+            Dropout(constants.MODEL_DROPOUT_RATE_TWO),
+            Dense(num_classes,
+                  activation=constants.MODEL_DENSE_TWO_ACTIVATION)
         ])
 
         model.compile(optimizer='adam',

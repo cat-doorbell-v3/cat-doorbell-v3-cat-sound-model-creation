@@ -61,3 +61,28 @@ Additional coefficients can provide diminishing returns or even introduce
 noise for certain applications.
 """
 FEATURE_SIZE = 13
+
+#
+# Machine learning parameters
+#
+MODEL_CONV2D_FILTERS = 8
+
+MODEL_CONV2D_KERNEL_SIZE = (3, 3)
+
+MODEL_CONV2D_ACTIVATION = 'relu'
+
+MODEL_CONV2D_KERNEL_REGULARIZER = 0.001
+
+MODEL_MAX_POOL_SIZE = (2, 2)
+
+MODEL_DROPOUT_RATE_ONE = 0.2
+
+MODEL_DENSE_UNITS = 10
+
+MODEL_DENSE_ONE_ACTIVATION = 'relu'
+
+MODEL_DENSE_KERNEL_REGULARIZER = 0.001
+
+MODEL_DROPOUT_RATE_TWO = 0.5
+
+MODEL_DENSE_TWO_ACTIVATION = 'softmax'
