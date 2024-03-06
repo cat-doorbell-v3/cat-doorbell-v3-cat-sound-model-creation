@@ -1,5 +1,6 @@
 import os
 import shutil
+import wave
 import zipfile
 
 import librosa
@@ -201,3 +202,130 @@ def get_metrics(best_model, X_val, y_val, X_train):
 
     # Now you can also include the ROC-AUC in the print statement at the end.
     print(f'Best Model - Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, AUC-ROC: {roc_auc:.4f}')
+
+
+def get_directory_wav_sampling_rates(root_dir):
+    """
+    Walks through a directory and its subdirectories to find .wav files and compile a list of unique sampling rates.
+
+    :param root_dir: The root directory to start the walk from.
+    """
+    unique_sampling_rates = set()  # Use a set to store unique sampling rates
+
+    for subdir, dirs, files in os.walk(root_dir):
+        for file in files:
+            if file.endswith(".wav"):
+                file_path = os.path.join(subdir, file)
+                try:
+                    with wave.open(file_path, 'r') as wav_file:
+                        frame_rate = wav_file.getframerate()
+                        unique_sampling_rates.add(frame_rate)  # Add the frame rate to the set
+                except wave.Error as e:
+                    print(f"Error reading {file_path}: {e}")
+
+    # Convert the set to a sorted list to print the sampling rates in order
+    sorted_sampling_rates = sorted(list(unique_sampling_rates))
+    print(f"Unique Sampling Rates: {sorted_sampling_rates}")
+    return sorted_sampling_rates
+
+
+def get_bit_depth(wav_file_path):
+    try:
+        with wave.open(wav_file_path, 'r') as wav_file:
+            sample_width_bytes = wav_file.getsampwidth()
+            bit_depth = sample_width_bytes * 8  # Convert bytes to bits
+            return bit_depth
+    except wave.Error:
+        print(f"Error reading {wav_file_path}. It might not be a valid WAV file.")
+        return None
+
+
+def get_all_bit_depth(directory_path):
+    bit_depths = {}
+    for root, dirs, files in os.walk(directory_path):
+        for file in files:
+            if file.endswith(".wav"):
+                full_path = os.path.join(root, file)
+                bit_depth = get_bit_depth(full_path)
+                if bit_depth:
+                    if bit_depth in bit_depths:
+                        bit_depths[bit_depth].append(full_path)
+                    else:
+                        bit_depths[bit_depth] = [full_path]
+
+    # Check if bit_depths contains only one entry
+    if len(bit_depths) == 1:
+        # Return just the bit depth value
+        return list(bit_depths.keys())[0]
+
+    return bit_depths
+
+
+def get_audio_durations(directory_path):
+    """
+    Walks through a directory, calculates the duration of all .wav files,
+    and computes the minimum, maximum, and average durations.
+
+    Args:
+    directory_path (str): Path to the directory to search for .wav files.
+
+    Returns:
+    None
+    """
+    durations = []
+
+    for root, dirs, files in os.walk(directory_path):
+        for file in files:
+            if file.lower().endswith('.wav'):
+                file_path = os.path.join(root, file)
+                y, sr = librosa.load(file_path, sr=None)  # Load with the original sampling rate
+                duration = librosa.get_duration(y=y, sr=sr)
+                durations.append(duration)
+
+    if durations:
+        min_duration = min(durations)
+        max_duration = max(durations)
+        average_duration = sum(durations) / len(durations)
+    else:
+        print("No .wav files found in the directory.")
+        return None, None, None
+
+    return min_duration, max_duration, average_duration
+
+
+def generate_cpp_definitions(feature_size, sample_rate, target_duration, fft_window_size, hop_length):
+    total_samples = target_duration * sample_rate
+    feature_count = int(1 + (total_samples - fft_window_size) / hop_length)
+    feature_duration_ms = int((fft_window_size / sample_rate) * 1000)
+    return {
+        "kMaxAudioSampleSize": int((sample_rate / 1000) * feature_duration_ms),
+        "kAudioSampleFrequency": sample_rate,
+        "kFeatureSize": feature_size,
+        "kFeatureCount": feature_count,
+        "kFeatureElementCount": int(feature_size * feature_count),
+        "kFeatureStrideMs": int((hop_length / sample_rate) * 1000),
+        "kFeatureDurationMs": feature_duration_ms,
+    }
+
+
+def generate_header_file(label_map, audio_constants, output_file="cat_sound_model.h"):
+    labels = list(label_map.keys())
+    category_count = len(labels)
+
+    with open(output_file, "w") as f:
+        f.write("#ifndef CAT_SOUND_MODEL_H_\n")
+        f.write("#define CAT_SOUND_MODEL_H_\n\n")
+
+        # Write audio constants
+        for key, value in audio_constants.items():
+            f.write(f"constexpr int {key} = {value};\n")
+        f.write("\n")
+
+        # Write category labels
+        f.write(f"constexpr int kCategoryCount = {category_count};\n")
+        f.write("constexpr const char* kCategoryLabels[kCategoryCount] = {\n")
+        for label in labels:
+            f.write(f'    "{label}",\n')
+        f.write("};\n\n")
+
+        f.write("#endif  // CAT_SOUND_MODEL_H_\n")
