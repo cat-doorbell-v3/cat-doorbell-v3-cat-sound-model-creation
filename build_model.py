@@ -1,7 +1,5 @@
 import numpy as np
 from keras.regularizers import l2
-from sklearn.metrics import precision_score, recall_score, f1_score
-from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.callbacks import EarlyStopping
@@ -42,6 +40,9 @@ def main():
 
     best_model = None
     best_model_history = None
+    best_x_val = None
+    best_y_val = None
+    best_x_train = None
     best_accuracy = 0
     fold_no = 1
     fold_metrics = []
@@ -104,38 +105,24 @@ def main():
             best_accuracy = mean_val_accuracy
             best_model = model
             best_model_history = history.history  # Store the current best model's history
+            best_x_val = X_val
+            best_y_val = y_val
+            best_x_train = X_train
             # Saving the best model's weights
             model_save_path = '/tmp/best_model.h5'
             save_model(model, model_save_path)
 
         fold_no += 1
 
+    utils.convert_to_tflite(best_model, X_train, constants.MODEL_FILE_NAME)
+
     # After all folds are completed, we have the best model based on validation accuracy
     print(f"Best model achieved an average validation accuracy of: {best_accuracy}")
 
     utils.plot_model_fit(best_model_history)
 
-    # Generate predictions for the validation set
-    y_val_pred = best_model.predict(X_val)
-    # Convert predictions from one hot to class integers
-    y_val_pred_classes = np.argmax(y_val_pred, axis=1)
-    # Convert true validation labels from one hot to class integers
-    y_val_true_classes = np.argmax(y_val, axis=1)
+    utils.get_metrics(best_model, best_x_val, best_y_val, best_x_train)
 
-    # Calculate precision, recall, and F1 score
-    precision = precision_score(y_val_true_classes, y_val_pred_classes, average='macro')
-    recall = recall_score(y_val_true_classes, y_val_pred_classes, average='macro')
-    f1 = f1_score(y_val_true_classes, y_val_pred_classes, average='macro')
-
-    utils.convert_to_tflite(best_model, X_train, constants.MODEL_FILE_NAME)
-
-    pos_class_probabilities = y_val_pred[:, 1]
-
-    # Now we calculate the AUC-ROC using the true class labels and the predicted probabilities
-    roc_auc = roc_auc_score(y_val_true_classes, pos_class_probabilities)
-
-    # Now you can also include the ROC-AUC in the print statement at the end.
-    print(f'Best Model - Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, AUC-ROC: {roc_auc:.4f}')
 
 
 
