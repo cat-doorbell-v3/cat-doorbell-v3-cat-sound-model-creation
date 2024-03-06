@@ -65,7 +65,7 @@ FEATURE_SIZE = 13
 #
 # Machine learning parameters
 #
-MODEL_CONV2D_FILTERS = 8
+MODEL_CONV2D_FILTERS = 4
 
 MODEL_CONV2D_KERNEL_SIZE = (3, 3)
 

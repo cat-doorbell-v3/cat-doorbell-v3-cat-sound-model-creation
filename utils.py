@@ -133,6 +133,7 @@ def load_dataset(dataset_path, categories, max_pad_len):
 
 
 # Convert the model to the TensorFlow Lite format with quantization
+
 def convert_to_tflite(model, X_train, filename):
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
@@ -148,7 +149,12 @@ def convert_to_tflite(model, X_train, filename):
     converter.inference_output_type = tf.int8
 
     tflite_model_quant = converter.convert()
-    open(filename, "wb").write(tflite_model_quant)
+    with open(filename, "wb") as f:
+        f.write(tflite_model_quant)
+
+    # Calculate the file size in kilobytes
+    file_size_kb = os.path.getsize(filename) / 1024
+    print(f"The size of the .tflite file is {file_size_kb:.2f} KB.")
 
 
 def plot_model_fit(history_data):
