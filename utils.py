@@ -351,3 +351,35 @@ def generate_header_file(label_map, audio_constants, output_file="cat_sound_mode
         f.write("};\n\n")
 
         f.write("#endif  // CAT_SOUND_MODEL_H_\n")
+
+
+def load_tflite_model(tflite_model_path):
+    # Load the TFLite model and allocate tensors.
+    interpreter = tf.lite.Interpreter(model_path=tflite_model_path)
+    interpreter.allocate_tensors()
+
+    # Get input and output tensors.
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+
+    return interpreter, input_details, output_details
+
+
+def predict_with_tflite_model(interpreter, input_details, output_details, X_test):
+    # Depending on the model, the input data might need to be quantized to int8 or uint8
+    # Check `input_details[0]['dtype']` to determine the correct data type
+    # Ensure that the input data type matches the model's expected input
+    X_test = X_test.astype(input_details[0]['dtype'])
+
+    predictions = []
+
+    for i in range(len(X_test)):
+        # If the model expects quantized input, quantize the test data accordingly before setting the tensor
+        # This depends on the `input_details[0]['quantization']` parameters
+
+        interpreter.set_tensor(input_details[0]['index'], [X_test[i]])
+        interpreter.invoke()
+        output_data = interpreter.get_tensor(output_details[0]['index'])
+        predictions.append(output_data[0])
+
+    return np.array(predictions)

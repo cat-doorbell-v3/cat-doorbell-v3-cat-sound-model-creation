@@ -1,13 +1,21 @@
 #
-MODEL_FILE_NAME = "/tmp/cat_doorbell_model.tflite"
+MODEL_FILE_NAME = "cat_doorbell_model.tflite"
 #
-MODEL_DATASET = "cat-doorbell-model-input"
-MODEL_DATASET_ZIP = f"{MODEL_DATASET}.zip"
-MODEL_DATASET_PATH = f"/tmp/{MODEL_DATASET}"
-#
-TEST_DATASET = "cat-doorbell-model-test"
-TEST_DATASET_ZIP = f"{TEST_DATASET}.zip"
-TEST_DATASET_PATH = f"/tmp/{TEST_DATASET}"
+# MODEL_DATASET = "cat-doorbell-model-input"
+# MODEL_DATASET_ZIP = f"{MODEL_DATASET}.zip"
+# MODEL_DATASET_PATH = f"/tmp/{MODEL_DATASET}"
+# #
+# TEST_DATASET = "cat-doorbell-model-test"
+# TEST_DATASET_ZIP = f"{TEST_DATASET}.zip"
+# TEST_DATASET_PATH = f"/tmp/{TEST_DATASET}"
+
+SAMPLES_DATASET = "samples"
+SAMPLES_DATASET_ZIP = f"{SAMPLES_DATASET}.zip"
+SAMPLES_DATASET_PATH = f"/tmp/{SAMPLES_DATASET}"
+SAMPLES_DATASET_BUILD_PATH = f"/tmp/{SAMPLES_DATASET}/build"
+SAMPLES_DATASET_TEST_PATH = f"/tmp/{SAMPLES_DATASET}/test"
+
+
 #
 # This is common to both build and test
 DATASET_CATEGORIES = [
@@ -107,8 +115,9 @@ EPOCHS = 10
 # Google AudioSet extract sample parameters
 #
 TFRECORD_FILES_PATTERN = '/tmp/audioset/*/*.tfrecord'
-CAT_OUTPUT_DIR = '/tmp/cat-doorbell-model-input/cat'
-NOT_CAT_OUTPUT_DIR = '/tmp/cat-doorbell-model-input/not_cat'
+CAT_OUTPUT_DIR = '/tmp/model-test/cat'
+NOT_CAT_OUTPUT_DIR = '/tmp/model-test/not_cat'
+SAMPLE_COUNT = 100
 
 """
 Indices per this file: http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/class_labels_indices.csv
