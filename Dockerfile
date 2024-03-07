@@ -2,7 +2,7 @@
 FROM python:3.9-slim
 
 WORKDIR /output
-
+WORKDIR /artifacts
 WORKDIR /app
 
 COPY docker /app
