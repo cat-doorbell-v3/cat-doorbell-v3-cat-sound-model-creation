@@ -39,7 +39,6 @@ def build_header():
 def test_model():
     # Find the maximum spectrogram length
     max_pad_len = utils.find_max_spectrogram_length(constants.SAMPLES_DATASET_TEST_PATH, constants.DATASET_CATEGORIES)
-    print(f"Maximum pad length: {max_pad_len}")
 
     # Load and pad/truncate dataset
     X, y = utils.load_dataset(constants.SAMPLES_DATASET_TEST_PATH, constants.DATASET_CATEGORIES, max_pad_len)
@@ -67,13 +66,8 @@ def test_model():
 
 
 def build_model():
-    # utils.remove_directories([constants.MODEL_DATASET])
-
-    # utils.unzip_file(constants.MODEL_DATASET_ZIP, '/tmp')
-
     # Find the maximum spectrogram length
     max_pad_len = utils.find_max_spectrogram_length(constants.SAMPLES_DATASET_BUILD_PATH, constants.DATASET_CATEGORIES)
-    print(f"Maximum pad length: {max_pad_len}")
 
     # Load and pad/truncate dataset
     X, y = utils.load_dataset(constants.SAMPLES_DATASET_BUILD_PATH, constants.DATASET_CATEGORIES, max_pad_len)
@@ -185,6 +179,7 @@ def build_model():
 def main():
     utils.remove_directories([constants.SAMPLES_DATASET])
     utils.unzip_file(constants.SAMPLES_DATASET_ZIP, '/tmp')
+
     build_model()
     test_model()
     build_header()

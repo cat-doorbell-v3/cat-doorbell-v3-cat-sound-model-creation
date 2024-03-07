@@ -1,8 +1,8 @@
 #
-MODEL_FILE_NAME = "cat_doorbell_model.tflite"
+MODEL_FILE_NAME = "model/cat_doorbell_model.tflite"
 
 SAMPLES_DATASET = "samples"
-SAMPLES_DATASET_ZIP = f"{SAMPLES_DATASET}.zip"
+SAMPLES_DATASET_ZIP = f"input/{SAMPLES_DATASET}.zip"
 SAMPLES_DATASET_PATH = f"/tmp/{SAMPLES_DATASET}"
 SAMPLES_DATASET_BUILD_PATH = f"/tmp/{SAMPLES_DATASET}/build"
 SAMPLES_DATASET_TEST_PATH = f"/tmp/{SAMPLES_DATASET}/test"
@@ -102,28 +102,3 @@ PATIENCE = 3
 BATCH_SIZE = 32
 
 EPOCHS = 10
-
-#
-# Google AudioSet extract sample parameters
-#
-TFRECORD_FILES_PATTERN = '/tmp/audioset/*/*.tfrecord'
-CAT_OUTPUT_DIR = '/tmp/model-test/cat'
-NOT_CAT_OUTPUT_DIR = '/tmp/model-test/not_cat'
-SAMPLE_COUNT = 100
-
-"""
-Indices per this file: http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/class_labels_indices.csv
-"""
-CAT_CAT_SOUND_INDEX = 81
-CAT_PURR_SOUND_INDEX = 82
-CAT_MEOW_SOUND_INDEX = 83
-CAT_HISS_SOUND_INDEX = 84
-CAT_CATERWAUL_SOUND_INDEX = 85
-
-CAT_SOUND_INDICES = {
-    CAT_CAT_SOUND_INDEX,
-    CAT_PURR_SOUND_INDEX,
-    CAT_MEOW_SOUND_INDEX,
-    CAT_HISS_SOUND_INDEX,
-    CAT_CATERWAUL_SOUND_INDEX
-}
