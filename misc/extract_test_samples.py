@@ -4,7 +4,29 @@ import subprocess
 
 import tensorflow as tf
 
-import constants
+# Google AudioSet extract sample parameters
+#
+TFRECORD_FILES_PATTERN = '/tmp/audioset/*/*.tfrecord'
+CAT_OUTPUT_DIR = '/tmp/model-test/cat'
+NOT_CAT_OUTPUT_DIR = '/tmp/model-test/not_cat'
+SAMPLE_COUNT = 100
+
+"""
+Indices per this file: http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/class_labels_indices.csv
+"""
+CAT_CAT_SOUND_INDEX = 81
+CAT_PURR_SOUND_INDEX = 82
+CAT_MEOW_SOUND_INDEX = 83
+CAT_HISS_SOUND_INDEX = 84
+CAT_CATERWAUL_SOUND_INDEX = 85
+
+CAT_SOUND_INDICES = {
+    CAT_CAT_SOUND_INDEX,
+    CAT_PURR_SOUND_INDEX,
+    CAT_MEOW_SOUND_INDEX,
+    CAT_HISS_SOUND_INDEX,
+    CAT_CATERWAUL_SOUND_INDEX
+}
 
 FEATURE_DESCRIPTION = {
     'video_id': tf.io.FixedLenFeature([], tf.string),
@@ -18,7 +40,7 @@ def is_meow(entry):
         example = tf.train.Example()
         example.ParseFromString(entry.numpy())
         for key, feature in example.features.feature.items():
-            if key == 'labels' and constants.CAT_MEOW_SOUND_INDEX in feature.int64_list.value:
+            if key == 'labels' and CAT_MEOW_SOUND_INDEX in feature.int64_list.value:
                 return True
         return False
 
@@ -34,7 +56,7 @@ def is_cat(entry):
             # Convert label indices to a set for efficient intersection check
             label_indices = set(labels_feature.int64_list.value)
             # Check if there is any intersection between label indices and cat sound indices
-            if label_indices.intersection(constants.CAT_SOUND_INDICES):
+            if label_indices.intersection(CAT_SOUND_INDICES):
                 return True
         return False
 
@@ -105,13 +127,13 @@ def extract_audio_files(dataset, output_dir, feature_description):
 def main():
     print("Checking if output directories exist...")
     # Ensure output directories exist
-    os.makedirs(constants.CAT_OUTPUT_DIR, exist_ok=True)
-    os.makedirs(constants.NOT_CAT_OUTPUT_DIR, exist_ok=True)
+    os.makedirs(CAT_OUTPUT_DIR, exist_ok=True)
+    os.makedirs(NOT_CAT_OUTPUT_DIR, exist_ok=True)
 
     print("Loading dataset...")
 
     # Use Python's glob to find TFRecord files
-    tfrecord_files = tf.io.gfile.glob(constants.TFRECORD_FILES_PATTERN)
+    tfrecord_files = tf.io.gfile.glob(TFRECORD_FILES_PATTERN)
     print(f"Found {len(tfrecord_files)} TFRecord files")
 
     print("shuffle to randomize order of files")
@@ -126,7 +148,7 @@ def main():
     print(f"Raw tf.data.Dataset has {dataset_raw_size} records")
 
     print("Creating Meow tf.data.Dataset")
-    dataset_cat = dataset_raw.filter(lambda x: is_meow(x)).take(constants.SAMPLE_COUNT)
+    dataset_cat = dataset_raw.filter(lambda x: is_meow(x)).take(SAMPLE_COUNT)
 
     print("Counting Meow tf.data.Dataset")
     dataset_cat_size = sum(1 for _ in dataset_cat)
@@ -134,7 +156,7 @@ def main():
     print(f"Meow tf.data.Dataset has {dataset_cat_size} records")
 
     print("Creating NOT Cat tf.data.Dataset")
-    dataset_not_cat = dataset_raw.filter(lambda x: not is_cat(x)).take(constants.SAMPLE_COUNT)
+    dataset_not_cat = dataset_raw.filter(lambda x: not is_cat(x)).take(SAMPLE_COUNT)
 
     print("Counting NOT Cat tf.data.Dataset")
     dataset_not_cat_size = sum(1 for _ in dataset_not_cat)
@@ -142,10 +164,10 @@ def main():
     print(f"NOT Cat tf.data.Dataset has {dataset_not_cat_size} records")
 
     print("Extracting audio files for dataset_cat")
-    extract_audio_files(dataset_cat, constants.CAT_OUTPUT_DIR, FEATURE_DESCRIPTION)
+    extract_audio_files(dataset_cat, CAT_OUTPUT_DIR, FEATURE_DESCRIPTION)
 
     print("Extracting audio files for dataset_not_cat")
-    extract_audio_files(dataset_not_cat, constants.NOT_CAT_OUTPUT_DIR, FEATURE_DESCRIPTION)
+    extract_audio_files(dataset_not_cat, NOT_CAT_OUTPUT_DIR, FEATURE_DESCRIPTION)
 
     print("Done")
 
