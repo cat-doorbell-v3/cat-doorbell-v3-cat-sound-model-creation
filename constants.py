@@ -1,13 +1,5 @@
 #
 MODEL_FILE_NAME = "cat_doorbell_model.tflite"
-#
-# MODEL_DATASET = "cat-doorbell-model-input"
-# MODEL_DATASET_ZIP = f"{MODEL_DATASET}.zip"
-# MODEL_DATASET_PATH = f"/tmp/{MODEL_DATASET}"
-# #
-# TEST_DATASET = "cat-doorbell-model-test"
-# TEST_DATASET_ZIP = f"{TEST_DATASET}.zip"
-# TEST_DATASET_PATH = f"/tmp/{TEST_DATASET}"
 
 SAMPLES_DATASET = "samples"
 SAMPLES_DATASET_ZIP = f"{SAMPLES_DATASET}.zip"
