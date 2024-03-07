@@ -140,8 +140,7 @@ def convert_to_tflite(model, X_train, filename):
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
     def representative_dataset_gen():
-        for i in range(100):
-            # Ensure the sample input data is cast to FLOAT32
+        for i in range(len(X_train)):
             yield [X_train[i].reshape(1, *X_train[i].shape).astype(np.float32)]
 
     converter.representative_dataset = representative_dataset_gen
