@@ -1,5 +1,5 @@
 #
-MODEL_FILE_NAME = "../models/cat_doorbell_model.tflite"
+MODEL_FILE_NAME = "/tmp/cat_doorbell_model.tflite"
 #
 MODEL_DATASET = "cat-doorbell-model-input"
 MODEL_DATASET_ZIP = f"{MODEL_DATASET}.zip"
@@ -10,7 +10,10 @@ TEST_DATASET_ZIP = f"{TEST_DATASET}.zip"
 TEST_DATASET_PATH = f"/tmp/{TEST_DATASET}"
 #
 # This is common to both build and test
-DATASET_CATEGORIES = ["cat", "not_cat"]
+DATASET_CATEGORIES = [
+    "cat",
+    "not_cat"
+]
 DATASET_LABEL_MAP = {
     "cat": 0,
     "not_cat": 1
@@ -88,11 +91,24 @@ MODEL_DROPOUT_RATE_TWO = 0.5
 MODEL_DENSE_TWO_ACTIVATION = 'softmax'
 
 #
+# Training parameters
+#
+KFOLD_SPLITS = 5
+
+TRAIN_TEST_SPLIT_SIZE = 0.2
+
+PATIENCE = 3
+
+BATCH_SIZE = 32
+
+EPOCHS = 10
+
+#
 # Google AudioSet extract sample parameters
 #
-TFRECORD_FILES_PATTERN = '/input/audioset/*/*.tfrecord'
-CAT_OUTPUT_DIR = '/output/cat-doorbell-model-input/cat'
-NOT_CAT_OUTPUT_DIR = '/output/cat-doorbell-model-input/not_cat'
+TFRECORD_FILES_PATTERN = '/tmp/audioset/*/*.tfrecord'
+CAT_OUTPUT_DIR = '/tmp/cat-doorbell-model-input/cat'
+NOT_CAT_OUTPUT_DIR = '/tmp/cat-doorbell-model-input/not_cat'
 
 """
 Indices per this file: http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/class_labels_indices.csv

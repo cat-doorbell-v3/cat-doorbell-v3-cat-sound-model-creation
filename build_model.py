@@ -6,7 +6,6 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.layers import Conv2D, MaxPooling2D
 from tensorflow.keras.layers import Dense, Flatten, Dropout
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.models import save_model
 from tensorflow.keras.utils import to_categorical
 
 import constants
@@ -14,9 +13,9 @@ import utils
 
 
 def main():
-    utils.remove_directories([constants.MODEL_DATASET])
+    # utils.remove_directories([constants.MODEL_DATASET])
 
-    utils.unzip_file(constants.MODEL_DATASET_ZIP, '/tmp')
+    # utils.unzip_file(constants.MODEL_DATASET_ZIP, '/tmp')
 
     # Find the maximum spectrogram length
     max_pad_len = utils.find_max_spectrogram_length(constants.MODEL_DATASET_PATH, constants.DATASET_CATEGORIES)
@@ -30,13 +29,14 @@ def main():
 
     X_augmented, y_augmented = utils.augment_data(X, y)
     # Split the dataset into training and validation sets
-    X_train, X_val, y_train, y_val = train_test_split(X_augmented, y_augmented, test_size=0.2, random_state=42)
+    X_train, X_val, y_train, y_val = train_test_split(X_augmented, y_augmented,
+                                                      test_size=constants.TRAIN_TEST_SPLIT_SIZE, random_state=42)
 
     num_classes = len(constants.DATASET_CATEGORIES)
 
     input_shape = X_train.shape[1:]  # Should be (spectrogram_height, spectrogram_width, 1)
 
-    kfold = KFold(n_splits=5, shuffle=True, random_state=42)
+    kfold = KFold(n_splits=constants.KFOLD_SPLITS, shuffle=True, random_state=42)
 
     best_model = None
     best_model_history = None
@@ -77,12 +77,12 @@ def main():
                       metrics=['accuracy'])
 
         # Model summary
-        model.summary()
+        # model.summary()
 
         # Define early stopping callback
         early_stopping = EarlyStopping(
             monitor='val_loss',  # Monitor the validation set loss
-            patience=1,  # Number of epochs with no improvement after which training will be stopped
+            patience=constants.PATIENCE,  # Number of epochs with no improvement after which training will be stopped
             restore_best_weights=True
             # Restores model weights from the epoch with the best value of the monitored quantity
         )
@@ -90,8 +90,8 @@ def main():
         # Include early stopping in the fit function
         history = model.fit(
             X_train, y_train,
-            epochs=30,
-            batch_size=32,
+            epochs=constants.EPOCHS,
+            batch_size=constants.BATCH_SIZE,
             validation_data=(X_val, y_val),
             shuffle=True,
             callbacks=[early_stopping]
@@ -116,22 +116,19 @@ def main():
             best_y_val = y_val
             best_x_train = X_train
             # Saving the best model's weights
-            model_save_path = '/tmp/best_model.h5'
-            save_model(model, model_save_path)
+            # model_save_path = '/tmp/best_model.h5'
+            # save_model(model, model_save_path)
 
         fold_no += 1
 
-    utils.convert_to_tflite(best_model, X_train, constants.MODEL_FILE_NAME)
+    utils.convert_to_tflite(best_model, best_x_train, constants.MODEL_FILE_NAME)
 
     # After all folds are completed, we have the best model based on validation accuracy
-    print(f"Best model achieved an average validation accuracy of: {best_accuracy}")
+    print(f"Best model achieved an average validation accuracy of: {round(best_accuracy, 2)}")
 
     utils.plot_model_fit(best_model_history)
 
     utils.get_metrics(best_model, best_x_val, best_y_val, best_x_train)
-
-
-
 
 
 if __name__ == '__main__':

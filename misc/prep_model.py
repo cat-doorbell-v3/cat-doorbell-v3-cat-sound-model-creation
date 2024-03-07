@@ -234,7 +234,7 @@ if __name__ == "__main__":
     print(f"Re-analyze directory {directory}")
     analyze_wav_files(directory)
 
-    print(f"Save directory {directory} in a zip file")
-    create_model_zip(directory)
+    # print(f"Save directory {directory} in a zip file")
+    # create_model_zip(directory)
 
     print("Done")
