@@ -1,5 +1,7 @@
 version: 0.2
 
+timeout-in-minutes: 120  # 2 hours
+
 phases:
   install:
     commands:
