@@ -142,10 +142,10 @@ def main():
     print(f"NOT Cat tf.data.Dataset has {dataset_not_cat_size} records")
 
     print("Extracting audio files for dataset_cat")
-    extract_audio_files(dataset_cat, constants.CAT_OUTPUT_DIR, constants.FEATURE_DESCRIPTION)
+    extract_audio_files(dataset_cat, constants.CAT_OUTPUT_DIR, FEATURE_DESCRIPTION)
 
     print("Extracting audio files for dataset_not_cat")
-    extract_audio_files(dataset_not_cat, constants.NOT_CAT_OUTPUT_DIR, constants.FEATURE_DESCRIPTION)
+    extract_audio_files(dataset_not_cat, constants.NOT_CAT_OUTPUT_DIR, FEATURE_DESCRIPTION)
 
     print("Done")
 
