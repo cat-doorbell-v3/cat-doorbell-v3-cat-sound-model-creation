@@ -12,10 +12,3 @@ phases:
       - zip -r cat-doorbell-model-input.zip cat-doorbell-model-input
       # Move the zip file to a known location for artifacts
       - mv cat-doorbell-model-input.zip /artifacts/
-  artifacts:
-    files:
-      - /artifacts/cat-doorbell-v3-model-input.zip # Or cat-doorbell-v3-model-input.tar.gz
-    # Specify the S3 bucket name
-    name: cat-doorbell-model-input-artifacts
-    discard-paths: yes
-
