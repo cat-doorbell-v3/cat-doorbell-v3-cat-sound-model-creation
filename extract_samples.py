@@ -1,4 +1,3 @@
-import argparse
 import os
 import random
 import subprocess
@@ -103,7 +102,7 @@ def extract_audio_files(dataset, output_dir, feature_description):
         download_audio_segment(video_id, start_time_seconds, end_time_seconds, output_filename)
 
 
-def main(input_dir, output_dir):
+def main():
     print("Checking if output directories exist...")
     # Ensure output directories exist
     os.makedirs(constants.CAT_OUTPUT_DIR, exist_ok=True)
@@ -154,13 +153,8 @@ def main(input_dir, output_dir):
 if __name__ == '__main__':
     import time
 
-    parser = argparse.ArgumentParser(description='Process TFRecord files to extract audio for cat sound detection.')
-    parser.add_argument('input_dir', type=str, help='Input directory containing TFRecord files')
-    parser.add_argument('output_dir', type=str, help='Output directory to save extracted audio files')
-    args = parser.parse_args()
-
     start_time = time.time()
-    main(args.input_dir, args.output_dir)
+    main()
     end_time = time.time()
     elapsed_time = end_time - start_time
     # Convert elapsed time to hours and minutes
