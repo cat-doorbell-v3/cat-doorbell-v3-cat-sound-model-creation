@@ -158,6 +158,28 @@ def convert_to_tflite(model, X_train, filename):
     print(f"The size of the .tflite file is {file_size_kb:.2f} KB.")
 
 
+def convert_to_tflite_from_tfrecord(model, dataset, filename):
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+
+    def representative_dataset_gen():
+        for input_value, _ in dataset.take(100):  # Adjust the number of samples as necessary
+            # Ensure the input data is cast to FLOAT32
+            yield [input_value.numpy().astype(np.float32)]
+
+    converter.representative_dataset = representative_dataset_gen
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.int8
+    converter.inference_output_type = tf.int8
+
+    tflite_model_quant = converter.convert()
+    with open(filename, "wb") as f:
+        f.write(tflite_model_quant)
+
+    # Calculate the file size in kilobytes
+    file_size_kb = os.path.getsize(filename) / 1024
+    print(f"The size of the .tflite file is {file_size_kb:.2f} KB.")
+
 def plot_model_fit(history_data):
     # Plotting training & validation accuracy values
     plt.figure(figsize=(12, 6))
