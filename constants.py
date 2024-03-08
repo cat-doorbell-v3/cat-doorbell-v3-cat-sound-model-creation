@@ -1,5 +1,6 @@
 #
 MODEL_FILE_NAME = "model/cat_doorbell_model.tflite"
+MODEL_HEADER_FILE_NAME = "model/cat_doorbell_model.h"
 
 SAMPLES_DATASET = "samples"
 SAMPLES_DATASET_ZIP = f"input/{SAMPLES_DATASET}.zip"

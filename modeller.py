@@ -29,7 +29,7 @@ def build_header():
                                                         constants.N_FFT,
                                                         constants.HOP_LENGTH)
 
-    utils.generate_header_file(constants.DATASET_LABEL_MAP, audio_cc_constants)
+    utils.generate_header_file(constants.DATASET_LABEL_MAP, audio_cc_constants, constants.MODEL_HEADER_FILE_NAME)
 
 
 def build_model():
