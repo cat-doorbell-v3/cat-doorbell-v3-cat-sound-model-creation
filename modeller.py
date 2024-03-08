@@ -82,7 +82,8 @@ def build_model():
 
     num_classes = len(constants.DATASET_CATEGORIES)
 
-    input_shape = X_train.shape[1:]  # Should be (spectrogram_height, spectrogram_width, 1)
+    input_shape = X_train.shape[1:]
+    print(f"Input shape: {input_shape}")
 
     kfold = KFold(n_splits=constants.KFOLD_SPLITS, shuffle=True, random_state=42)
 
@@ -93,7 +94,6 @@ def build_model():
     best_x_train = None
     best_accuracy = 0
     fold_no = 1
-    fold_metrics = []
     for train, val in kfold.split(X_augmented, y_augmented):
         # Split the dataset into the current train and validation sets
         X_train, X_val = X_augmented[train], X_augmented[val]
@@ -132,7 +132,6 @@ def build_model():
             monitor='val_loss',  # Monitor the validation set loss
             patience=constants.PATIENCE,  # Number of epochs with no improvement after which training will be stopped
             restore_best_weights=True
-            # Restores model weights from the epoch with the best value of the monitored quantity
         )
 
         # Include early stopping in the fit function
@@ -145,15 +144,6 @@ def build_model():
             callbacks=[early_stopping]
         )
 
-        # Collect the metrics from the history object
-        fold_metrics.append({
-            'fold': fold_no,
-            'accuracy': history.history['accuracy'],
-            'val_accuracy': history.history['val_accuracy'],
-            'loss': history.history['loss'],
-            'val_loss': history.history['val_loss']
-        })
-
         # Check if this is the best model so far
         mean_val_accuracy = np.mean(history.history['val_accuracy'])
         if mean_val_accuracy > best_accuracy:
@@ -164,16 +154,18 @@ def build_model():
             best_y_val = y_val
             best_x_train = X_train
 
+        # Exit the loop if mean validation accuracy is 1.0
+        if np.isclose(best_accuracy, 1.0, rtol=1e-09, atol=1e-09):
+            print("Achieved perfect validation accuracy, exiting loop.")
+            break
+
         fold_no += 1
 
     utils.convert_to_tflite(best_model, best_x_train, constants.MODEL_FILE_NAME)
 
-    # After all folds are completed, we have the best model based on validation accuracy
-    print(f"Best model achieved an average validation accuracy of: {round(best_accuracy, 2)}")
-
     utils.plot_model_fit(best_model_history)
 
-    utils.get_metrics(best_model, best_x_val, best_y_val, best_x_train)
+    utils.get_metrics(best_model, best_x_val, best_y_val, best_accuracy)
 
 
 def main():

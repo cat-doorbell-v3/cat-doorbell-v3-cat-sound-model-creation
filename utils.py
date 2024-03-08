@@ -157,28 +157,6 @@ def convert_to_tflite(model, X_train, filename):
     print(f"The size of the .tflite file is {file_size_kb:.2f} KB.")
 
 
-def convert_to_tflite_from_tfrecord(model, dataset, filename):
-    converter = tf.lite.TFLiteConverter.from_keras_model(model)
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
-
-    def representative_dataset_gen():
-        for input_value, _ in dataset.take(100):  # Adjust the number of samples as necessary
-            # Ensure the input data is cast to FLOAT32
-            yield [input_value.numpy().astype(np.float32)]
-
-    converter.representative_dataset = representative_dataset_gen
-    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-    converter.inference_input_type = tf.int8
-    converter.inference_output_type = tf.int8
-
-    tflite_model_quant = converter.convert()
-    with open(filename, "wb") as f:
-        f.write(tflite_model_quant)
-
-    # Calculate the file size in kilobytes
-    file_size_kb = os.path.getsize(filename) / 1024
-    print(f"The size of the .tflite file is {file_size_kb:.2f} KB.")
-
 def plot_model_fit(history_data):
     # Plotting training & validation accuracy values
     plt.figure(figsize=(12, 6))
@@ -203,7 +181,7 @@ def plot_model_fit(history_data):
     plt.show()
 
 
-def get_metrics(best_model, X_val, y_val, X_train):
+def get_metrics(best_model, X_val, y_val, accuracy):
     # Generate predictions for the validation set
     y_val_pred = best_model.predict(X_val)
     # Convert predictions from one hot to class integers
@@ -222,7 +200,13 @@ def get_metrics(best_model, X_val, y_val, X_train):
     roc_auc = roc_auc_score(y_val_true_classes, pos_class_probabilities)
 
     # Now you can also include the ROC-AUC in the print statement at the end.
-    print(f'Best Model - Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, AUC-ROC: {roc_auc:.4f}')
+    print(
+        f'Precision: {precision:.2f}, '
+        f'Recall: {recall:.2f}, '
+        f'F1 Score: {f1:.2f}, '
+        f'AUC-ROC: {roc_auc:.2f}, '
+        f'Accuracy: {accuracy:.2f}'
+    )
 
 
 def get_directory_wav_sampling_rates(root_dir):
