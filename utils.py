@@ -349,17 +349,21 @@ def load_tflite_model(tflite_model_path):
 
 
 def predict_with_tflite_model(interpreter, input_details, output_details, X_test):
-    # Depending on the model, the input data might need to be quantized to int8 or uint8
-    # Check `input_details[0]['dtype']` to determine the correct data type
-    # Ensure that the input data type matches the model's expected input
-    X_test = X_test.astype(input_details[0]['dtype'])
+    # Check the expected dtype for input and convert X_test to that dtype
+    expected_dtype = input_details[0]['dtype']
+    X_test = X_test.astype(expected_dtype)
+
+    # Check if the model is quantized and requires input scaling
+    scale, zero_point = input_details[0]['quantization']
+    if scale != 0:  # This implies that the model is quantized
+        # Adjust for quantization using the scale and zero_point
+        X_test = X_test / scale + zero_point
+        X_test = X_test.astype(expected_dtype)
 
     predictions = []
 
     for i in range(len(X_test)):
-        # If the model expects quantized input, quantize the test data accordingly before setting the tensor
-        # This depends on the `input_details[0]['quantization']` parameters
-
+        # Set the tensor with the test data (quantized if needed)
         interpreter.set_tensor(input_details[0]['index'], [X_test[i]])
         interpreter.invoke()
         output_data = interpreter.get_tensor(output_details[0]['index'])

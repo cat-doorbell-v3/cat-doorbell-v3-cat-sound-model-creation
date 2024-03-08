@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.metrics import confusion_matrix
 
 import constants
@@ -29,7 +29,21 @@ def main():
 
     # Calculate the accuracy
     test_accuracy = accuracy_score(y, predicted_labels)
-    print(f"Test accuracy: {test_accuracy}")
+
+    # Calculate precision, recall, and F1 score
+    precision = precision_score(y, predicted_labels)
+    recall = recall_score(y, predicted_labels)
+    f1 = f1_score(y, predicted_labels)
+
+    # Print all metrics
+    print(
+        f"Test accuracy: {test_accuracy:.2f}, "
+        f"Precision: {precision:.2f}, "
+        f"Recall: {recall:.2f}, "
+        f"F1 Score: {f1:.2f}"
+    )
+
+    # Plot confusion matrix
     cm = confusion_matrix(y, predicted_labels)
     sns.heatmap(cm, annot=True, fmt='d')
     plt.xlabel('Predicted')
