@@ -7,9 +7,9 @@ import tensorflow as tf
 # Google AudioSet extract sample parameters
 #
 TFRECORD_FILES_PATTERN = '/tmp/audioset/*/*.tfrecord'
-CAT_OUTPUT_DIR = '/tmp/model-test/cat'
-NOT_CAT_OUTPUT_DIR = '/tmp/model-test/not_cat'
-SAMPLE_COUNT = 100
+CAT_OUTPUT_DIR = '/tmp/cat-doorbell-model-test/meow'
+NOT_CAT_OUTPUT_DIR = '/tmp/cat-doorbell-model-test/not_meow'
+SAMPLE_COUNT = 1000
 
 """
 Indices per this file: http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/class_labels_indices.csv
@@ -156,7 +156,7 @@ def main():
     print(f"Meow tf.data.Dataset has {dataset_cat_size} records")
 
     print("Creating NOT Cat tf.data.Dataset")
-    dataset_not_cat = dataset_raw.filter(lambda x: not is_cat(x)).take(SAMPLE_COUNT)
+    dataset_not_cat = dataset_raw.filter(lambda x: not is_cat(x)).take(dataset_cat_size)
 
     print("Counting NOT Cat tf.data.Dataset")
     dataset_not_cat_size = sum(1 for _ in dataset_not_cat)
