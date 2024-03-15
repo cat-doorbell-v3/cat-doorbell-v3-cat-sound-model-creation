@@ -8,7 +8,7 @@ import tensorflow as tf
 #
 TFRECORD_FILES_PATTERN = '/tmp/audioset/*/*.tfrecord'
 CAT_OUTPUT_DIR = '/tmp/cat-doorbell-model-test/meow'
-NOT_CAT_OUTPUT_DIR = '/tmp/cat-doorbell-model-test/not_meow'
+NOT_CAT_OUTPUT_DIR = '/tmp/cat-doorbell-model-test/other'
 SAMPLE_COUNT = 1000
 
 """
