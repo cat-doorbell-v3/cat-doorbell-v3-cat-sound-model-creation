@@ -29,7 +29,6 @@ FEATURE_DESCRIPTION = {
     'end_time_seconds': tf.io.FixedLenFeature([], tf.float32),
 }
 
-
 def is_meow(entry):
     def py_func(entry):
         example = tf.train.Example()
@@ -39,23 +38,6 @@ def is_meow(entry):
                 return True
         return False
 
-    return tf.py_function(py_func, [entry], Tout=tf.bool)
-
-
-def is_cat(entry):
-    def py_func(entry):
-        example = tf.train.Example()
-        example.ParseFromString(entry.numpy())
-        labels_feature = example.features.feature.get('labels')
-        if labels_feature:
-            # Convert label indices to a set for efficient intersection check
-            label_indices = set(labels_feature.int64_list.value)
-            # Check if there is any intersection between label indices and cat sound indices
-            if label_indices.intersection(CAT_SOUND_INDICES):
-                return True
-        return False
-
-    # Use tf.py_function to wrap the Python function
     return tf.py_function(py_func, [entry], Tout=tf.bool)
 
 
