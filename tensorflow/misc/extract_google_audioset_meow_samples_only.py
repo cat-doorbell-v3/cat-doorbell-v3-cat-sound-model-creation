@@ -1,3 +1,7 @@
+"""
+The input for this script was downloaded from here: https://research.google.com/audioset/download.html
+The dataset was: http://storage.googleapis.com/us_audioset/youtube_corpus/v1/features/features.tar.gz
+"""
 import os
 import random
 import subprocess
