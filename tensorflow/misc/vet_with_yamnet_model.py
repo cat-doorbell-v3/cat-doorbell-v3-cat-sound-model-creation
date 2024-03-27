@@ -1,5 +1,5 @@
 """
-Yamnet was downloade from here:
+Yamnet was downloaded from here:
 https://www.kaggle.com/models/google/yamnet/frameworks/tensorFlow2
 """
 import os
