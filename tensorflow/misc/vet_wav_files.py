@@ -3,7 +3,7 @@ import subprocess
 
 # Path to the directory where .wav files are located
 # Please update this path to the directory containing your .wav files.
-wav_files_directory = '/Users/tennis/sound-library/more-vetted-meows'
+wav_files_directory = '/tmp/google-audioset-samples/meow'
 
 
 # Function to find, play .wav files and move kept files to a specific directory
