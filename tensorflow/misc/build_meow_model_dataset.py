@@ -9,6 +9,7 @@ YamNet:
 Todo:
  - Pull/untar the audioset dataset from Google
  - Pull/unzip the dataset from YamNet
+ - Add other model subdirs (e.g. "background_noise")
 """
 import random
 import subprocess
