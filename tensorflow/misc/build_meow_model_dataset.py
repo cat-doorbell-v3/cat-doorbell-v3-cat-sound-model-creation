@@ -20,7 +20,7 @@ from pydub import AudioSegment
 
 TFRECORD_FILES_PATTERN = '/tmp/audioset/*/*.tfrecord'
 CAT_OUTPUT_DIR = '/tmp/cat-doorbell-model/meow'
-UNKNOWN_OUTPUT_DIR = '/tmp/cat-doorbell-model/unknown'
+UNKNOWN_OUTPUT_DIR = '/tmp/cat-doorbell-model/_unknown_'
 YAMNET_MODEL_DIR = '/Users/tennis/sound-library/yamnet/archive'
 
 SAMPLE_COUNT = 1000
@@ -214,7 +214,7 @@ def download_audio_segment(video_id, start_time, end_time, output_filename):
     subprocess.run(ffmpeg_cmd)
 
 
-def extract_audio_files(dataset, output_dir, feature_description):
+def download_audio_files(dataset, output_dir, feature_description):
     """
     Extracts audio files from a given dataset and saves them to the specified output directory.
     If a file with the intended name already exists, appends a dash and 4 random characters to the filename.
@@ -250,10 +250,6 @@ def count_wav_files(directory):
     wav_files = [file for file in files_in_directory if file.endswith(".wav")]
     return len(wav_files)
 
-
-# Example usage
-directory_path = '/path/to/your/directory'
-count_wav_files(directory_path)
 
 def main():
     print("Checking if output directories exist...")
@@ -294,11 +290,11 @@ def main():
 
     print(f"Unknown tf.data.Dataset has {dataset_unknown_size} records")
 
-    print("Extracting 10-second audio files for meow")
-    extract_audio_files(dataset_cat, CAT_OUTPUT_DIR, FEATURE_DESCRIPTION)
+    print("Downloading 10-second audio files from YouTube for meow")
+    download_audio_files(dataset_cat, CAT_OUTPUT_DIR, FEATURE_DESCRIPTION)
 
-    print("Extracting 10-second audio files for unknown")
-    extract_audio_files(dataset_unknown, UNKNOWN_OUTPUT_DIR, FEATURE_DESCRIPTION)
+    print("Downloading 10-second audio files from YouTube for unknown")
+    download_audio_files(dataset_unknown, UNKNOWN_OUTPUT_DIR, FEATURE_DESCRIPTION)
 
     print("Splitting CAT audio files into 1-second chunks")
     split_wav_files(CAT_OUTPUT_DIR)
