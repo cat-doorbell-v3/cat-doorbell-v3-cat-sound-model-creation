@@ -3,9 +3,12 @@ Google:
  - The input for this script was downloaded from here: https://research.google.com/audioset/download.html
  - The dataset was: http://storage.googleapis.com/us_audioset/youtube_corpus/v1/features/features.tar.gz
 
- YamNet:
-  - https://www.kaggle.com/models/google/yamnet/frameworks/tensorFlow2
+YamNet:
+ - https://www.kaggle.com/models/google/yamnet/frameworks/tensorFlow2
 
+Todo:
+ - Pull/untar the audioset dataset from Google
+ - Pull/unzip the dataset from YamNet
 """
 import os
 import random
@@ -25,14 +28,14 @@ SAMPLE_COUNT = 1000
 """
 Indices per this file: http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/class_labels_indices.csv
 """
-GOOGLE_CAT_CAT_SOUND_INDEX = 81
+GOOGLE_CAT_ALL_SOUND_INDEX = 81
 GOOGLE_CAT_PURR_SOUND_INDEX = 82
 GOOGLE_CAT_MEOW_SOUND_INDEX = 83
 GOOGLE_CAT_HISS_SOUND_INDEX = 84
 GOOGLE_CAT_CATERWAUL_SOUND_INDEX = 85
 
 GOOGLE_CAT_SOUND_INDICES = {
-    GOOGLE_CAT_CAT_SOUND_INDEX,
+    GOOGLE_CAT_ALL_SOUND_INDEX,
     GOOGLE_CAT_PURR_SOUND_INDEX,
     GOOGLE_CAT_MEOW_SOUND_INDEX,
     GOOGLE_CAT_HISS_SOUND_INDEX,
@@ -45,14 +48,14 @@ Indices per this file: https://github.com/tensorflow/models/blob/master/research
 
 YAMNET_CAT_SCORE_THRESHOLD = 0.8  # 80% certainty
 
-YAMNET_CAT_CAT_SOUND_INDEX = 76
+YAMNET_CAT_ALL_SOUND_INDEX = 76
 YAMNET_CAT_PURR_SOUND_INDEX = 77
 YAMNET_CAT_MEOW_SOUND_INDEX = 78
 YAMNET_CAT_HISS_SOUND_INDEX = 79
 YAMNET_CAT_CATERWAUL_SOUND_INDEX = 80
 
 YAMNET_CAT_SOUND_INDICES = {
-    YAMNET_CAT_CAT_SOUND_INDEX,
+    YAMNET_CAT_ALL_SOUND_INDEX,
     YAMNET_CAT_PURR_SOUND_INDEX,
     YAMNET_CAT_MEOW_SOUND_INDEX,
     YAMNET_CAT_HISS_SOUND_INDEX,
