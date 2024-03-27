@@ -9,13 +9,9 @@ This changes .wav files to conform to:
 """
 import glob
 import os
-import random
-import shutil
-import sys
 import wave
 
 import librosa
-import numpy as np
 import soundfile as sf
 from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
@@ -79,59 +75,6 @@ def trim_process_directory(input_dir, min_silence_len=1000, silence_thresh=-40):
                 trim_initial_silence(wav_path, min_silence_len, silence_thresh)
 
 
-def add_noise(y, noise_level=0.005):
-    noise = np.random.randn(len(y))
-    return y + noise_level * noise
-
-
-def time_stretch(y, rate=0.8):
-    return librosa.effects.time_stretch(y, rate=rate)
-
-
-def random_crop(y, sr, duration=1):
-    if len(y) > sr * duration:
-        start = np.random.randint(len(y) - sr * duration)
-        return y[start:start + sr * duration]
-    return y
-
-
-def change_volume(y, volume_change_dB=-6):
-    return librosa.db_to_amplitude(volume_change_dB) * y
-
-
-def pitch_shift(y, sr, n_steps=2.5):
-    return librosa.effects.pitch_shift(y, sr=sr, n_steps=n_steps)
-
-
-def augment_audio(file_path, output_dir):
-    y, sr = librosa.load(file_path)
-
-    # List of augmentation functions to randomly choose from
-    augmentations = [add_noise, time_stretch, random_crop, pitch_shift]
-    random.shuffle(augmentations)
-
-    # Apply two random augmentations
-    for aug in augmentations[:2]:
-        y = aug(y, sr)
-
-    # Apply volume change (not random)
-    y = change_volume(y)
-
-    # Save the augmented audio
-    base, ext = os.path.splitext(os.path.basename(file_path))
-    output_file_path = os.path.join(output_dir, f"{base}_augmented{ext}")
-    sf.write(output_file_path, y, sr)
-    print(f"Augmented file saved to {output_file_path}")
-
-
-def augment_process_directory(directory):
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith('.wav'):
-                file_path = os.path.join(root, file)
-                augment_audio(file_path, root)
-
-
 def count_wav_files_in_subdirs(parent_dir):
     # Check if the specified path is indeed a directory
     if not os.path.isdir(parent_dir):
@@ -189,29 +132,34 @@ def analyze_wav_files(directory):
     print(f"Average duration: {avg_duration} seconds")
 
 
-def create_model_zip(directory):
-    """
-    Creates a zip archive of the specified directory.
+def split_wav_files(directory_path):
+    # Ensure the provided path exists and is a directory
+    if not os.path.isdir(directory_path):
+        raise ValueError("The provided path is not a directory or does not exist.")
 
-    Args:
-    - directory (str): The path to the directory to be zipped.
+    # Iterate through all files in the directory
+    for filename in os.listdir(directory_path):
+        if filename.endswith('.wav'):
+            full_path = os.path.join(directory_path, filename)
 
-    Returns:
-    - None: Prints the path of the created zip file.
-    """
-    parent_dir = os.path.abspath(os.path.join(directory, os.pardir))
-    base_dir = os.path.basename(os.path.normpath(directory))
-    zip_file_path = os.path.join(parent_dir, base_dir)
-    shutil.make_archive(zip_file_path, 'zip', parent_dir, base_dir)
-    print(f"Created zip file: {zip_file_path}.zip")
+            # Load the .wav file
+            audio = AudioSegment.from_wav(full_path)
 
+            # Calculate the number of full 1-second chunks
+            num_chunks = len(audio) // 1000
+
+            # Split and save 1-second chunks
+            for i in range(num_chunks):
+                chunk = audio[i * 1000:(i + 1) * 1000]
+                chunk_name = f"{filename[:-4]}-{i}.wav"
+                chunk_path = os.path.join(directory_path, chunk_name)
+                chunk.export(chunk_path, format="wav")
+
+            # Delete the original file
+            os.remove(full_path)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: script_name.py <directory>")
-        sys.exit(1)
-
-    directory = sys.argv[1]
+    directory = '/tmp/youtube_downloads'
 
     print("First, count the number of files in the directory")
     count_wav_files_in_subdirs(directory)
@@ -222,19 +170,13 @@ if __name__ == "__main__":
     print(f"Conforming directory {directory}")
     conform_process_directory(directory)
 
-    print(f"Trimming directory {directory}")
-    trim_process_directory(directory)
-
-    print(f"Augmenting directory {directory}")
-    augment_process_directory(directory)
+    print(f"Splitting files in {directory}")
+    split_wav_files(directory)
 
     print("Re-count the files")
     count_wav_files_in_subdirs(directory)
 
     print(f"Re-analyze directory {directory}")
     analyze_wav_files(directory)
-
-    # print(f"Save directory {directory} in a zip file")
-    # create_model_zip(directory)
 
     print("Done")

@@ -8,14 +8,14 @@ import librosa
 import tensorflow as tf
 
 # Path to the directory containing .wav files
-wav_files_directory = '/tmp/google-audioset-samples/meow'
+wav_files_directory = '/tmp/youtube_downloads'
 yamnet_model_directory = '/Users/tennis/sound-library/yamnet/archive'
 
 # Load the YAMNet model
 yamnet_model = tf.saved_model.load(yamnet_model_directory)
 infer = yamnet_model.signatures["serving_default"]
 
-CAT_ID_INDEX = 76
+CAT_ID_INDEX = 78
 CAT_SCORE_THRESHOLD = 0.8  # 80%
 
 # Load the YAMNet model

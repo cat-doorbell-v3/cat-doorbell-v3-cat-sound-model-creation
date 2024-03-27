@@ -32,5 +32,5 @@ def split_wav_files(directory_path):
 
 # Example usage:
 # Replace '/path/to/your/directory' with the actual path to the directory containing your .wav files
-directory_path = '/tmp/google-audioset-samples/meow'
+directory_path = '/tmp/youtube_downloads'
 split_wav_files(directory_path)
