@@ -387,7 +387,6 @@ def main():
     chunked_unknown_file_count = count_wav_files(UNKNOWN_OUTPUT_DIR)
     print(f"{chunked_unknown_file_count} files in UNKNOWN directory")
 
-    print("Done")
 
 
 if __name__ == '__main__':
