@@ -153,7 +153,7 @@ def split_wav_files(directory_path):
             os.remove(full_path)
 
 
-def is_meow_in_google(entry):
+def is_google_meow(entry):
     def py_func(entry):
         example = tf.train.Example()
         example.ParseFromString(entry.numpy())
@@ -165,7 +165,7 @@ def is_meow_in_google(entry):
     return tf.py_function(py_func, [entry], Tout=tf.bool)
 
 
-def is_cat_in_google(entry):
+def is_google_cat(entry):
     def py_func(entry):
         example = tf.train.Example()
         example.ParseFromString(entry.numpy())
@@ -276,7 +276,7 @@ def main():
     print(f"Raw tf.data.Dataset has {dataset_raw_size} records")
 
     print("Creating Meow tf.data.Dataset")
-    dataset_cat = dataset_raw.filter(lambda x: is_meow_in_google(x)).take(SAMPLE_COUNT)
+    dataset_cat = dataset_raw.filter(lambda x: is_google_meow(x)).take(SAMPLE_COUNT)
 
     print("Counting Meow tf.data.Dataset")
     dataset_cat_size = sum(1 for _ in dataset_cat)
@@ -284,7 +284,7 @@ def main():
     print(f"Meow tf.data.Dataset has {dataset_cat_size} records")
 
     print("Creating Unknown tf.data.Dataset")
-    dataset_unknown = dataset_raw.filter(lambda x: not is_cat_in_google(x)).take(dataset_cat_size)
+    dataset_unknown = dataset_raw.filter(lambda x: not is_google_cat(x)).take(dataset_cat_size)
 
     print("Counting Unknown tf.data.Dataset")
     dataset_unknown_size = sum(1 for _ in dataset_unknown)
@@ -306,7 +306,7 @@ def main():
     print("Keeping meows in 1-second files using YAMNET")
     keep_meow_sounds_using_yamnet(CAT_OUTPUT_DIR)
 
-    print("Removing cat sounds in Unknown in 1-second files using YAMNET")
+    print("Removing cat sounds in Unknown files using YAMNET")
     remove_any_cat_sounds_using_yamnet(UNKNOWN_OUTPUT_DIR)
 
     print("Counting.wav files in CAT directory")
