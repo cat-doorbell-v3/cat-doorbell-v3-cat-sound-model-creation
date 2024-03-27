@@ -1,3 +1,7 @@
+"""
+Yamnet was downloade from here:
+https://www.kaggle.com/models/google/yamnet/frameworks/tensorFlow2
+"""
 import os
 
 import librosa
@@ -48,8 +52,4 @@ for filename in os.listdir(wav_files_directory):
         scores = output['output_0'].numpy()[0]
 
         if scores[CAT_ID_INDEX] < CAT_SCORE_THRESHOLD:
-            # If the score is below the threshold, delete the file
             os.remove(file_path)
-            print(f"Deleted {filename}, no cat sound detected.")
-        else:
-            print(f"Kept {filename}, cat sound detected.")
