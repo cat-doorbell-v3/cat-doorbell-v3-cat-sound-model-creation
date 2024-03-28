@@ -50,7 +50,6 @@ GOOGLE_CAT_SOUND_INDICES = {
 """
 Indices per this file: https://github.com/tensorflow/models/blob/master/research/audioset/yamnet/yamnet_class_map.csv
 """
-
 YAMNET_CAT_SCORE_THRESHOLD = 0.8  # 80% certainty
 
 YAMNET_CAT_ALL_SOUND_INDEX = 76
@@ -386,7 +385,6 @@ def main():
 
     chunked_unknown_file_count = count_wav_files(UNKNOWN_OUTPUT_DIR)
     print(f"{chunked_unknown_file_count} files in UNKNOWN directory")
-
 
 
 if __name__ == '__main__':
