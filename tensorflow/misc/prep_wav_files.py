@@ -13,9 +13,44 @@ import wave
 
 import librosa
 import soundfile as sf
+import tensorflow as tf
 from pydub import AudioSegment
-from pydub.silence import detect_nonsilent
 
+YAMNET_MODEL_DIR = '/Users/tennis/sound-library/yamnet/archive'
+YAMNET_CAT_SCORE_THRESHOLD = 0.8  # 80% certainty
+YAMNET_CAT_MEOW_SOUND_INDEX = 78
+
+
+def keep_meow_sounds(wav_files_directory):
+    yamnet_model = tf.saved_model.load(YAMNET_MODEL_DIR)
+    infer = yamnet_model.signatures["serving_default"]
+
+    # Go through each file in the directory
+    for filename in os.listdir(wav_files_directory):
+        if filename.endswith('.wav'):
+            file_path = os.path.join(wav_files_directory, filename)
+
+            # Load and preprocess the audio file
+            audio = load_audio_file(file_path)
+
+            # Prepare the audio tensor according to the model's expected input
+            audio_tensor = tf.constant(audio, dtype=tf.float32)
+
+            # Run inference
+            output = infer(waveform=audio_tensor)
+
+            # Extract scores from the output
+            scores = output['output_0'].numpy()[0]
+
+            if scores[YAMNET_CAT_MEOW_SOUND_INDEX] < YAMNET_CAT_SCORE_THRESHOLD:
+                #  Not a meow, so remove the file
+                os.remove(file_path)
+
+
+def load_audio_file(file_path, target_sr=16000):
+    # Load an audio file as a floating point time series
+    audio, sr = librosa.load(file_path, sr=target_sr)
+    return audio
 
 def conform_process_audio_file(file_path):
     # Load the file (automatically resampled to 16KHz and converted to mono)
@@ -38,42 +73,6 @@ def conform_process_directory(directory):
 
                 # Process the file
                 conform_process_audio_file(file_path)
-
-
-def trim_initial_silence(wav_path, min_silence_len=1000, silence_thresh=-40):
-    """
-    Removes initial silence from a WAV file and overwrites the original file with the trimmed audio.
-
-    Args:
-    wav_path (str): Path to the WAV file.
-    min_silence_len (int): Minimum length of a silence to be considered for trimming (in milliseconds).
-    silence_thresh (int): The upper bound for what's considered silence (in dB). Default is -40 dB.
-    """
-    sound = AudioSegment.from_wav(wav_path)
-    non_silents = detect_nonsilent(sound, min_silence_len=min_silence_len, silence_thresh=silence_thresh)
-
-    if non_silents:
-        start_trim = non_silents[0][0]
-        trimmed_sound = sound[start_trim:]
-        trimmed_sound.export(wav_path, format="wav")
-        print(f"Trimmed and saved {wav_path}")
-
-
-def trim_process_directory(input_dir, min_silence_len=1000, silence_thresh=-40):
-    """
-    Processes all WAV files in a directory and its subdirectories to remove initial silence, in place.
-
-    Args:
-    input_dir (str): Directory containing WAV files to process in place.
-    min_silence_len (int): Minimum length of silence in milliseconds for trimming.
-    silence_thresh (int): Silence threshold in dB.
-    """
-    for root, dirs, files in os.walk(input_dir):
-        for file in files:
-            if file.endswith(".wav"):
-                wav_path = os.path.join(root, file)
-                trim_initial_silence(wav_path, min_silence_len, silence_thresh)
-
 
 def count_wav_files_in_subdirs(parent_dir):
     # Check if the specified path is indeed a directory
@@ -172,6 +171,9 @@ if __name__ == "__main__":
 
     print(f"Splitting files in {directory}")
     split_wav_files(directory)
+
+    print("Keep only meows")
+    keep_meow_sounds(directory)
 
     print("Re-count the files")
     count_wav_files_in_subdirs(directory)
